@@ -25,9 +25,10 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             #pragma target 3.5
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS
+            #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -103,14 +104,7 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 {
                     Light lightData = GetAdditionalLight(li, i.positionWS);
                     float ndotl = saturate(dot(normalWS, lightData.direction));
-                    half shadowAtten = lightData.shadowAttenuation;
-    #if defined(_ADDITIONAL_LIGHT_SHADOWS)
-                    int perObjectIndex = GetPerObjectLightIndex(li);
-                    ShadowSamplingData shadowSampling = GetAdditionalLightShadowSamplingData(perObjectIndex);
-                    half4 shadowParams = GetAdditionalLightShadowParams(perObjectIndex);
-                    shadowAtten *= AdditionalLightRealtimeShadow(perObjectIndex, i.positionWS, lightData.direction, shadowParams, shadowSampling);
-    #endif
-                    lighting += ndotl * lightData.color * lightData.distanceAttenuation * shadowAtten;
+                    lighting += ndotl * lightData.color * lightData.distanceAttenuation * lightData.shadowAttenuation;
                 }
 
                 lighting += SampleSH(normalWS);

@@ -40,7 +40,7 @@ namespace RealTimeLightBaker
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
         private static readonly int MainTexTexelSizeId = Shader.PropertyToID("_MainTex_TexelSize");
         private const int MaxBakeTargets = 31;
-        private const uint BakeLayerBaseBit = 0;
+        private const uint BakeLayerBaseBit = 1;
         private const PerObjectData BakePerObjectData = PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.OcclusionProbe | PerObjectData.ShadowMask | PerObjectData.LightData | PerObjectData.LightIndices | PerObjectData.ReflectionProbes;
 
         private ShaderTagId _shaderTag;
