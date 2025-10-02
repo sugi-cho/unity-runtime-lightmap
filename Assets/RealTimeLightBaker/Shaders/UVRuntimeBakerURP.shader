@@ -11,9 +11,9 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
     SubShader
     {
         Tags { "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" "RenderType" = "Opaque" }
-        ZWrite Off
-        ZTest Always
         Cull Off
+        ZTest Always
+        ZWrite Off
         Blend One Zero
 
         Pass
@@ -25,7 +25,7 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             #pragma target 3.5
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
@@ -33,7 +33,6 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
             TEXTURE2D(_BaseMap);
             SAMPLER(sampler_BaseMap);
@@ -58,7 +57,7 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
 
             struct Varyings
             {
-                float4 positionCS  : SV_Position;
+                float4 positionCS  : SV_POSITION;
                 float2 uv0         : TEXCOORD0;
                 float3 positionWS  : TEXCOORD1;
                 float3 normalWS    : TEXCOORD2;
@@ -67,67 +66,52 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            Varyings vert(Attributes v)
+            Varyings vert(Attributes input)
             {
-                Varyings o;
-                UNITY_SETUP_INSTANCE_ID(v);
-                UNITY_TRANSFER_INSTANCE_ID(v, o);
-                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+                Varyings output;
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_TRANSFER_INSTANCE_ID(input, output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-                VertexPositionInputs posInputs = GetVertexPositionInputs(v.positionOS);
-                VertexNormalInputs normalInputs = GetVertexNormalInputs(v.normalOS, v.tangentOS);
+                VertexPositionInputs posInputs = GetVertexPositionInputs(input.positionOS);
+                VertexNormalInputs normalInputs = GetVertexNormalInputs(input.normalOS, input.tangentOS);
 
-                float2 uv = v.uv2;
-                uv.y = (_FlipY > 0.5) ? (1.0 - uv.y) : uv.y;
+                float2 uv = input.uv2;
+                uv.y = (_FlipY > 0.5f) ? (1.0f - uv.y) : uv.y;
 
-                o.positionCS = float4(uv * 2.0 - 1.0, 0.0, 1.0);
-                o.uv0 = TRANSFORM_TEX(v.uv0, _BaseMap);
-                o.positionWS = posInputs.positionWS;
-                o.normalWS = normalize(normalInputs.normalWS);
-                o.shadowCoord = TransformWorldToShadowCoord(posInputs.positionWS);
-                return o;
+                output.positionCS = float4(uv * 2.0f - 1.0f, 0.0f, 1.0f);
+                output.uv0 = TRANSFORM_TEX(input.uv0, _BaseMap);
+                output.positionWS = posInputs.positionWS;
+                output.normalWS = normalize(normalInputs.normalWS);
+                output.shadowCoord = TransformWorldToShadowCoord(output.positionWS);
+                return output;
             }
 
-                                                                                    float4 frag (Varyings i) : SV_Target
+            half4 frag(Varyings input) : SV_Target
             {
-                UNITY_SETUP_INSTANCE_ID(i);
-                float4 baseSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, i.uv0) * _BaseColor;
-                clip(baseSample.a - _Cutoff);
+                UNITY_SETUP_INSTANCE_ID(input);
 
-                float3 normalWS = SafeNormalize(i.normalWS);
+                float4 albedoSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv0) * _BaseColor;
+                clip(albedoSample.a - _Cutoff);
 
-                Light mainLight = GetMainLight(i.shadowCoord);
-                float3 lighting = saturate(dot(normalWS, mainLight.direction)) * mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
+                float3 normalWS = SafeNormalize(input.normalWS);
+
+                Light mainLight = GetMainLight(input.shadowCoord);
+                float3 lighting = saturate(dot(normalWS, -mainLight.direction)) * mainLight.color * mainLight.shadowAttenuation;
 
                 uint additionalCount = GetAdditionalLightsCount();
                 [loop] for (uint li = 0u; li < additionalCount; ++li)
                 {
-                    Light lightData = GetAdditionalLight(li, i.positionWS);
-                    float ndotl = saturate(dot(normalWS, lightData.direction));
-                    lighting += ndotl * lightData.color * lightData.distanceAttenuation * lightData.shadowAttenuation;
+                    Light lightData = GetAdditionalLight(li, input.positionWS);
+                    float ndotl = saturate(dot(normalWS, -lightData.direction));
+                    lighting += ndotl * lightData.color * lightData.shadowAttenuation;
                 }
 
-                lighting += SampleSH(normalWS);
-
-                float3 outColor = lerp(lighting, lighting * baseSample.rgb, saturate(_MultiplyAlbedo));
-                return float4(outColor, 1.0);
+                float3 baked = lighting;
+                float3 outColor = lerp(baked, baked * albedoSample.rgb, saturate(_MultiplyAlbedo));
+                return half4(outColor, 1.0f);
             }
             ENDHLSL
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

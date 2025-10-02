@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -26,6 +27,16 @@ namespace RealTimeLightBaker
             [NonSerialized] public uint bakeRenderingLayerMask;
         }
 
+        private sealed class LightState
+        {
+            public Light light;
+            public uint originalRenderingLayerMask;
+            public UniversalAdditionalLightData additionalLightData;
+            public bool originalCustomShadowLayers;
+            public RenderingLayerMask originalRenderingLayers;
+            public RenderingLayerMask originalShadowRenderingLayers;
+        }
+
         [SerializeField] private List<TargetEntry> targets = new();
         [SerializeField] private Material bakerMaterial;
         [SerializeField] private bool bakeEveryFrame = true;
@@ -36,17 +47,18 @@ namespace RealTimeLightBaker
         [SerializeField] private Material dilationMaterial;
         [SerializeField] private int dilationPassIndex = 0;
 
-        private static readonly int TempDilationRTId = Shader.PropertyToID("_RuntimeLightmapDilationTemp");
-        private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
-        private static readonly int MainTexTexelSizeId = Shader.PropertyToID("_MainTex_TexelSize");
         private const int MaxBakeTargets = 31;
         private const uint BakeLayerBaseBit = 1;
-        private const PerObjectData BakePerObjectData = PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.OcclusionProbe | PerObjectData.ShadowMask | PerObjectData.LightData | PerObjectData.LightIndices | PerObjectData.ReflectionProbes;
 
-        private ShaderTagId _shaderTag;
-        private bool _shaderTagInitialized;
-        private Material _cachedBakerMaterial;
+        private static readonly List<RuntimeLightmapBaker> ActiveBakers = new();
+
+        private readonly List<TargetEntry> _activeEntries = new();
+        private readonly List<RealTimeLightBakerFeature.BakeTarget> _bakeTargets = new();
+        private readonly List<LightState> _activeLights = new();
+
         private bool _forceBake;
+        private bool _isWaitingForPass;
+        private uint _combinedBakeMask;
         private int _propertyId;
 
         /// <summary>
@@ -56,21 +68,21 @@ namespace RealTimeLightBaker
 
         private void Awake()
         {
-            EnsureShaderTagInitialized();
+            CachePropertyId();
         }
 
         private void OnEnable()
         {
             CachePropertyId();
-            EnsureShaderTagInitialized();
             EnsureResources();
-            RenderPipelineManager.endCameraRendering += HandleEndCameraRendering;
+            RenderPipelineManager.beginCameraRendering += HandleBeginCameraRendering;
             _forceBake = true;
         }
 
         private void OnDisable()
         {
-            RenderPipelineManager.endCameraRendering -= HandleEndCameraRendering;
+            RenderPipelineManager.beginCameraRendering -= HandleBeginCameraRendering;
+            CancelActiveSession();
             ReleaseAllRenderTextures();
         }
 
@@ -78,7 +90,6 @@ namespace RealTimeLightBaker
         {
             defaultLightmapSize = Mathf.Clamp(Mathf.ClosestPowerOfTwo(defaultLightmapSize), 128, 4096);
             CachePropertyId();
-            EnsureShaderTagInitialized();
 
             if (targets != null)
             {
@@ -126,29 +137,6 @@ namespace RealTimeLightBaker
             return null;
         }
 
-        private void EnsureShaderTagInitialized()
-        {
-            var currentMaterial = bakerMaterial;
-            if (_shaderTagInitialized && currentMaterial == _cachedBakerMaterial)
-            {
-                return;
-            }
-
-            string lightMode = "UniversalForward";
-            if (currentMaterial != null)
-            {
-                var materialLightMode = currentMaterial.GetTag("LightMode", false, lightMode);
-                if (!string.IsNullOrEmpty(materialLightMode))
-                {
-                    lightMode = materialLightMode;
-                }
-            }
-
-            _shaderTag = new ShaderTagId(lightMode);
-            _cachedBakerMaterial = currentMaterial;
-            _shaderTagInitialized = true;
-        }
-
         /// <summary>
         /// Replaces the current targets with the provided renderers, using the default lightmap size.
         /// </summary>
@@ -183,140 +171,218 @@ namespace RealTimeLightBaker
         public void SetBakerMaterial(Material material)
         {
             bakerMaterial = material;
-            _cachedBakerMaterial = null;
-            _shaderTagInitialized = false;
             _forceBake = true;
         }
 
-        private void HandleEndCameraRendering(ScriptableRenderContext context, Camera camera)
+        private void HandleBeginCameraRendering(ScriptableRenderContext context, Camera camera)
         {
-            if (!ShouldBakeThisCamera(camera) || !ShouldBakeNow())
+            if (!ShouldBakeThisCamera(camera) || !ShouldBakeNow() || _isWaitingForPass)
             {
                 return;
             }
 
-            if (!EnsureResources() || targets == null || targets.Count == 0 || bakerMaterial == null)
+            if (!EnsureResources())
             {
                 return;
             }
 
-            var activeEntries = new List<TargetEntry>(targets.Count);
-            try
+            PrepareAndEnqueueBake();
+        }
+
+        private void PrepareAndEnqueueBake()
+        {
+            var feature = RealTimeLightBakerFeature.Instance;
+            if (feature == null || bakerMaterial == null)
             {
-                int assignedCount = 0;
-                foreach (var entry in targets)
+                return;
+            }
+
+            _activeEntries.Clear();
+            _bakeTargets.Clear();
+            _combinedBakeMask = 0u;
+
+            int assignedCount = 0;
+            foreach (var entry in targets)
+            {
+                if (entry == null || entry.renderer == null || entry.lightmap == null)
                 {
-                    if (entry == null || entry.renderer == null || entry.lightmap == null)
-                    {
-                        continue;
-                    }
-
-                    if (assignedCount >= MaxBakeTargets)
-                    {
-                        Debug.LogWarning("RuntimeLightmapBaker: Exceeded maximum supported targets when using DrawRenderers. Remaining targets are skipped.");
-                        break;
-                    }
-
-                    entry.originalRenderingLayerMask = entry.renderer.renderingLayerMask;
-                    entry.bakeRenderingLayerMask = 1u << (int)(BakeLayerBaseBit + assignedCount);
-                    entry.renderer.renderingLayerMask = entry.originalRenderingLayerMask | entry.bakeRenderingLayerMask;
-                    activeEntries.Add(entry);
-                    assignedCount++;
+                    continue;
                 }
 
-                if (activeEntries.Count == 0)
+                if (assignedCount >= MaxBakeTargets)
                 {
-                    return;
+                    Debug.LogWarning("RuntimeLightmapBaker: Exceeded maximum supported targets for a single bake pass. Remaining targets are skipped.");
+                    break;
                 }
 
-                if (!camera.TryGetCullingParameters(out var cullingParameters))
+                entry.originalRenderingLayerMask = entry.renderer.renderingLayerMask;
+                entry.bakeRenderingLayerMask = 1u << (int)(BakeLayerBaseBit + assignedCount);
+                entry.renderer.renderingLayerMask = entry.originalRenderingLayerMask | entry.bakeRenderingLayerMask;
+
+                _combinedBakeMask |= entry.bakeRenderingLayerMask;
+                _activeEntries.Add(entry);
+
+                var bakeTarget = new RealTimeLightBakerFeature.BakeTarget(
+                    entry.renderer,
+                    entry.lightmap,
+                    clear: true,
+                    Color.clear,
+                    Rect.zero,
+                    entry.bakeRenderingLayerMask);
+
+                _bakeTargets.Add(bakeTarget);
+                assignedCount++;
+            }
+
+            if (_activeEntries.Count == 0)
+            {
+                return;
+            }
+
+            CaptureLightStates(_combinedBakeMask);
+
+            feature.settings.bakeMaterial = bakerMaterial;
+            feature.settings.enableDilation = dilationMaterial != null;
+            feature.settings.dilationMaterial = dilationMaterial;
+            feature.settings.dilationPassIndex = dilationPassIndex;
+
+            feature.EnqueueTargets(_bakeTargets);
+
+            if (!ActiveBakers.Contains(this))
+            {
+                ActiveBakers.Add(this);
+            }
+
+            _isWaitingForPass = true;
+        }
+
+        private void CaptureLightStates(uint bakeMask)
+        {
+            _activeLights.Clear();
+
+            var lights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < lights.Length; i++)
+            {
+                var light = lights[i];
+                if (light == null)
                 {
-                    return;
+                    continue;
                 }
 
-                uint combinedLayerMask = 0u;
-                foreach (var entry in activeEntries)
+                var state = new LightState
                 {
-                    combinedLayerMask |= (uint)(1 << entry.renderer.gameObject.layer);
-                }
-
-                cullingParameters.cullingMask |= combinedLayerMask;
-                cullingParameters.maximumVisibleLights = UniversalRenderPipeline.maxVisibleAdditionalLights;
-                cullingParameters.shadowDistance = Mathf.Max(QualitySettings.shadowDistance, camera.farClipPlane);
-
-                var cullingResults = context.Cull(ref cullingParameters);
-
-                var sortingSettings = new SortingSettings(camera) { criteria = SortingCriteria.None };
-                var drawingSettings = new DrawingSettings(_shaderTag, sortingSettings)
-                {
-                    overrideMaterial = bakerMaterial,
-                    overrideMaterialPassIndex = 0,
-                    perObjectData = BakePerObjectData,
-                    enableDynamicBatching = false,
-                    enableInstancing = false
+                    light = light,
+                    originalRenderingLayerMask = (uint)light.renderingLayerMask
                 };
 
-                foreach (var entry in activeEntries)
+                if (light.TryGetComponent(out UniversalAdditionalLightData additionalData))
                 {
-                    var cmd = CommandBufferPool.Get("Runtime UV Lightmap Bake");
-                    cmd.SetRenderTarget(entry.lightmap);
-                    cmd.SetViewport(new Rect(0, 0, entry.lightmap.width, entry.lightmap.height));
-                    cmd.ClearRenderTarget(true, true, Color.clear);
-                    context.ExecuteCommandBuffer(cmd);
-                    CommandBufferPool.Release(cmd);
+                    state.additionalLightData = additionalData;
+                    state.originalCustomShadowLayers = additionalData.customShadowLayers;
+                    state.originalRenderingLayers = additionalData.renderingLayers;
+                    state.originalShadowRenderingLayers = additionalData.shadowRenderingLayers;
 
-                    var filteringSettings = new FilteringSettings(RenderQueueRange.all)
-                    {
-                        renderingLayerMask = entry.bakeRenderingLayerMask,
-                        layerMask = 1 << entry.renderer.gameObject.layer
-                    };
+                    additionalData.customShadowLayers = true;
 
-                    context.DrawRenderers(cullingResults, ref drawingSettings, ref filteringSettings);
+                    uint renderingLayersMask = (uint)additionalData.renderingLayers | bakeMask;
+                    additionalData.renderingLayers = (RenderingLayerMask)renderingLayersMask;
 
-                    if (dilationMaterial != null)
-                    {
-                        var dilationCmd = CommandBufferPool.Get("Runtime Lightmap Dilation");
-                        var desc = entry.lightmap.descriptor;
-                        desc.msaaSamples = 1;
-                        desc.depthBufferBits = 0;
-                        desc.useMipMap = false;
-                        desc.autoGenerateMips = false;
+                    uint shadowRenderingLayersMask = (uint)additionalData.shadowRenderingLayers | bakeMask;
+                    additionalData.shadowRenderingLayers = (RenderingLayerMask)shadowRenderingLayersMask;
+                }
 
-                        dilationCmd.GetTemporaryRT(TempDilationRTId, desc, FilterMode.Bilinear);
+                light.renderingLayerMask = (int)(((uint)light.renderingLayerMask) | bakeMask);
+                _activeLights.Add(state);
+            }
+        }
+        private void CancelActiveSession()
+        {
+            if (!_isWaitingForPass)
+            {
+                return;
+            }
 
-                        float width = entry.lightmap.width;
-                        float height = entry.lightmap.height;
-                        var texelSize = new Vector4(1f / width, 1f / height, width, height);
-                        dilationCmd.SetGlobalTexture(MainTexId, entry.lightmap);
-                        dilationCmd.SetGlobalVector(MainTexTexelSizeId, texelSize);
+            RestoreRenderers();
+            RestoreLights();
+            _activeEntries.Clear();
+            _activeLights.Clear();
+            _isWaitingForPass = false;
+            _combinedBakeMask = 0u;
+            ActiveBakers.Remove(this);
+        }
 
-                        dilationCmd.Blit(entry.lightmap, TempDilationRTId, dilationMaterial, dilationPassIndex);
-                        dilationCmd.Blit(TempDilationRTId, entry.lightmap);
-                        dilationCmd.ReleaseTemporaryRT(TempDilationRTId);
+        private void RestoreRenderers()
+        {
+            foreach (var entry in _activeEntries)
+            {
+                if (entry?.renderer != null)
+                {
+                    entry.renderer.renderingLayerMask = entry.originalRenderingLayerMask;
+                }
+            }
+        }
 
-                        context.ExecuteCommandBuffer(dilationCmd);
-                        CommandBufferPool.Release(dilationCmd);
-                    }
+        private void RestoreLights()
+        {
+            foreach (var state in _activeLights)
+            {
+                if (state.light == null)
+                {
+                    continue;
+                }
 
-                    if (autoApplyToTargets)
+                state.light.renderingLayerMask = (int)state.originalRenderingLayerMask;
+
+                if (state.additionalLightData != null)
+                {
+                    state.additionalLightData.customShadowLayers = state.originalCustomShadowLayers;
+                    state.additionalLightData.renderingLayers = state.originalRenderingLayers;
+                    state.additionalLightData.shadowRenderingLayers = state.originalShadowRenderingLayers;
+                }
+            }
+        }
+        internal static void NotifyBakePassFinished(CommandBuffer cmd)
+        {
+            if (ActiveBakers.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < ActiveBakers.Count; i++)
+            {
+                var baker = ActiveBakers[i];
+                baker?.FinalizeBake(cmd);
+            }
+
+            ActiveBakers.Clear();
+        }
+
+        private void FinalizeBake(CommandBuffer cmd)
+        {
+            _ = cmd;
+            if (!_isWaitingForPass)
+            {
+                return;
+            }
+
+            if (autoApplyToTargets)
+            {
+                foreach (var entry in _activeEntries)
+                {
+                    if (entry != null && entry.renderer != null && entry.lightmap != null)
                     {
                         ApplyToRenderer(entry);
                     }
                 }
-
-                context.Submit();
-            }
-            finally
-            {
-                foreach (var entry in activeEntries)
-                {
-                    if (entry != null && entry.renderer != null)
-                    {
-                        entry.renderer.renderingLayerMask = entry.originalRenderingLayerMask;
-                    }
-                }
             }
 
+            RestoreRenderers();
+            RestoreLights();
+
+            _activeEntries.Clear();
+            _activeLights.Clear();
+            _isWaitingForPass = false;
+            _combinedBakeMask = 0u;
             _forceBake = false;
         }
 
@@ -478,3 +544,8 @@ namespace RealTimeLightBaker
         }
     }
 }
+
+
+
+
+
