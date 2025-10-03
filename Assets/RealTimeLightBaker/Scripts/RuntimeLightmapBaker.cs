@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Rendering;
@@ -24,7 +25,6 @@ namespace RealTimeLightBaker
             [NonSerialized] public RenderTexture lightmap;
             [NonSerialized] public MaterialPropertyBlock mpb;
             [NonSerialized] public uint originalRenderingLayerMask;
-            [NonSerialized] public uint bakeRenderingLayerMask;
         }
 
         private sealed class LightState
@@ -59,6 +59,7 @@ namespace RealTimeLightBaker
         private bool _forceBake;
         private bool _isWaitingForPass;
         private uint _combinedBakeMask;
+        private bool _loggedPipelineSettings;
         private int _propertyId;
 
         /// <summary>
@@ -84,6 +85,7 @@ namespace RealTimeLightBaker
             RenderPipelineManager.beginCameraRendering -= HandleBeginCameraRendering;
             CancelActiveSession();
             ReleaseAllRenderTextures();
+            _loggedPipelineSettings = false;
         }
 
         private void OnValidate()
@@ -189,6 +191,191 @@ namespace RealTimeLightBaker
             PrepareAndEnqueueBake();
         }
 
+        private void LogPipelineSettingsOnce()
+        {
+            // Emit key URP configuration details once per lifecycle to aid debugging.
+            if (_loggedPipelineSettings)
+            {
+                return;
+            }
+
+            if (UniversalRenderPipeline.asset is not UniversalRenderPipelineAsset urpAsset)
+            {
+                Debug.LogWarning("RuntimeLightmapBaker: Universal Render Pipeline asset is not set. Runtime baking requires an active URP asset.");
+                _loggedPipelineSettings = true;
+                return;
+            }
+
+            var rendererData = TryGetDefaultRendererData(urpAsset);
+            RenderingMode renderingMode = RenderingMode.Forward;
+            bool usesForwardPlus = false;
+
+            if (rendererData is UniversalRendererData universalData)
+            {
+                renderingMode = universalData.renderingMode;
+                usesForwardPlus = universalData.usesClusterLightLoop;
+            }
+            else if (rendererData != null)
+            {
+                var rendererType = rendererData.GetType();
+                var renderingModeProperty = rendererType.GetProperty("renderingMode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (renderingModeProperty != null && renderingModeProperty.PropertyType == typeof(RenderingMode))
+                {
+                    renderingMode = (RenderingMode)renderingModeProperty.GetValue(rendererData);
+                    usesForwardPlus = renderingMode == RenderingMode.ForwardPlus || renderingMode == RenderingMode.DeferredPlus;
+                }
+                else
+                {
+                    var usesClusterProperty = rendererType.GetProperty("usesClusterLightLoop", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (usesClusterProperty?.PropertyType == typeof(bool))
+                    {
+                        usesForwardPlus = (bool)usesClusterProperty.GetValue(rendererData);
+                    }
+                }
+            }
+            else
+            {
+                var supportsForwardPlusProperty = urpAsset.GetType().GetProperty("supportsForwardPlus", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (supportsForwardPlusProperty?.PropertyType == typeof(bool))
+                {
+                    usesForwardPlus = (bool)supportsForwardPlusProperty.GetValue(urpAsset);
+                }
+
+                var renderingModeProperty = urpAsset.GetType().GetProperty("renderingMode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (renderingModeProperty?.PropertyType == typeof(RenderingMode))
+                {
+                    renderingMode = (RenderingMode)renderingModeProperty.GetValue(urpAsset);
+                }
+            }
+
+            bool usesRenderingLayers = urpAsset.useRenderingLayers;
+            bool additionalLightsPerPixel = urpAsset.additionalLightsRenderingMode == LightRenderingMode.PerPixel;
+            bool additionalLightShadows = urpAsset.supportsAdditionalLightShadows;
+            int perObjectLimit = urpAsset.maxAdditionalLightsCount;
+
+            Debug.Log($"RuntimeLightmapBaker: URP settings -> RendererMode={renderingMode}, ForwardPlus={usesForwardPlus}, UseRenderingLayers={usesRenderingLayers}, AdditionalLightsMode={urpAsset.additionalLightsRenderingMode}, AdditionalLightShadows={additionalLightShadows}, AdditionalLightsPerObject={perObjectLimit}");
+
+            if (!usesRenderingLayers)
+            {
+                Debug.LogWarning("RuntimeLightmapBaker: Use Rendering Layers is disabled on the URP asset. Enable it to ensure bake isolation.");
+            }
+            if (!additionalLightsPerPixel)
+            {
+                Debug.LogWarning("RuntimeLightmapBaker: Additional Lights must be set to Per Pixel for runtime baking.");
+            }
+            if (!additionalLightShadows)
+            {
+                Debug.LogWarning("RuntimeLightmapBaker: Additional Light Shadows are disabled. Point/spot light shadows will not bake.");
+            }
+            if (perObjectLimit < 8)
+            {
+                Debug.LogWarning($"RuntimeLightmapBaker: Additional Lights Per Object Limit is {perObjectLimit}. Consider increasing it to 8 or more for stable results.");
+            }
+
+            _loggedPipelineSettings = true;
+        }
+
+        private uint CollectUsedRenderingLayers(Light[] lights)
+        {
+            // Gather rendering layer bits already in use so we can assign unique ones per target.
+            uint usedMask = 0u;
+
+            if (targets != null)
+            {
+                for (int i = 0; i < targets.Count; i++)
+                {
+                    var entry = targets[i];
+                    if (entry?.renderer == null)
+                    {
+                        continue;
+                    }
+
+                    usedMask |= entry.renderer.renderingLayerMask;
+                }
+            }
+
+            if (lights != null)
+            {
+                for (int i = 0; i < lights.Length; i++)
+                {
+                    var light = lights[i];
+                    if (light == null)
+                    {
+                        continue;
+                    }
+
+                    usedMask |= (uint)light.renderingLayerMask;
+
+                    if (light.TryGetComponent(out UniversalAdditionalLightData additionalData))
+                    {
+                        usedMask |= (uint)additionalData.renderingLayers;
+                        usedMask |= (uint)additionalData.shadowRenderingLayers;
+                    }
+                }
+            }
+
+            for (int i = 0; i < ActiveBakers.Count; i++)
+            {
+                var baker = ActiveBakers[i];
+                if (baker == null)
+                {
+                    continue;
+                }
+
+                usedMask |= baker._combinedBakeMask;
+            }
+
+            return usedMask;
+        }
+
+        private static uint ReserveRenderingLayerBit(ref uint usedMask)
+        {
+            for (int bit = (int)BakeLayerBaseBit; bit < 32; bit++)
+            {
+                uint candidate = 1u << bit;
+                if ((usedMask & candidate) == 0u)
+                {
+                    usedMask |= candidate;
+                    return candidate;
+                }
+            }
+
+            Debug.LogWarning("RuntimeLightmapBaker: No free rendering layer bit was available. Reusing the base bake bit (1).");
+            uint fallback = 1u << (int)BakeLayerBaseBit;
+            usedMask |= fallback;
+            return fallback;
+        }
+
+        private static ScriptableRendererData TryGetDefaultRendererData(UniversalRenderPipelineAsset asset)
+        {
+            if (asset == null)
+            {
+                return null;
+            }
+
+            var assetType = asset.GetType();
+            var rendererProperty = assetType.GetProperty("scriptableRendererData", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (rendererProperty?.GetValue(asset) is ScriptableRendererData propertyData && propertyData != null)
+            {
+                return propertyData;
+            }
+
+            var rendererListField = assetType.GetField("m_RendererDataList", BindingFlags.Instance | BindingFlags.NonPublic);
+            var defaultIndexField = assetType.GetField("m_DefaultRendererIndex", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            if (rendererListField?.GetValue(asset) is ScriptableRendererData[] rendererArray && rendererArray.Length > 0)
+            {
+                int index = defaultIndexField != null ? (int)defaultIndexField.GetValue(asset) : 0;
+                if (index < 0 || index >= rendererArray.Length)
+                {
+                    index = 0;
+                }
+
+                return rendererArray[index];
+            }
+
+            return null;
+        }
         private void PrepareAndEnqueueBake()
         {
             var feature = RealTimeLightBakerFeature.Instance;
@@ -201,7 +388,10 @@ namespace RealTimeLightBaker
             _bakeTargets.Clear();
             _combinedBakeMask = 0u;
 
-            int assignedCount = 0;
+            var sceneLights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            uint usedMask = CollectUsedRenderingLayers(sceneLights);
+
+            int processedCount = 0;
             foreach (var entry in targets)
             {
                 if (entry == null || entry.renderer == null || entry.lightmap == null)
@@ -209,37 +399,38 @@ namespace RealTimeLightBaker
                     continue;
                 }
 
-                if (assignedCount >= MaxBakeTargets)
+                if (processedCount >= MaxBakeTargets)
                 {
                     Debug.LogWarning("RuntimeLightmapBaker: Exceeded maximum supported targets for a single bake pass. Remaining targets are skipped.");
                     break;
                 }
 
-                entry.originalRenderingLayerMask = entry.renderer.renderingLayerMask;
-                entry.bakeRenderingLayerMask = 1u << (int)(BakeLayerBaseBit + assignedCount);
-                entry.renderer.renderingLayerMask = entry.originalRenderingLayerMask | entry.bakeRenderingLayerMask;
+                uint layerBit = ReserveRenderingLayerBit(ref usedMask);
 
-                _combinedBakeMask |= entry.bakeRenderingLayerMask;
+                entry.originalRenderingLayerMask = entry.renderer.renderingLayerMask;
+                entry.renderer.renderingLayerMask = entry.originalRenderingLayerMask | layerBit;
+
+                _combinedBakeMask |= layerBit;
                 _activeEntries.Add(entry);
 
                 var bakeTarget = new RealTimeLightBakerFeature.BakeTarget(
-                    entry.renderer,
                     entry.lightmap,
                     clear: true,
                     Color.clear,
                     Rect.zero,
-                    entry.bakeRenderingLayerMask);
+                    layerBit);
 
                 _bakeTargets.Add(bakeTarget);
-                assignedCount++;
+                processedCount++;
             }
 
-            if (_activeEntries.Count == 0)
+            if (_activeEntries.Count == 0 || _combinedBakeMask == 0u)
             {
                 return;
             }
 
-            CaptureLightStates(_combinedBakeMask);
+            LogPipelineSettingsOnce();
+            CaptureLightStates(_combinedBakeMask, sceneLights);
 
             feature.settings.bakeMaterial = bakerMaterial;
             feature.settings.enableDilation = dilationMaterial != null;
@@ -256,11 +447,16 @@ namespace RealTimeLightBaker
             _isWaitingForPass = true;
         }
 
-        private void CaptureLightStates(uint bakeMask)
+
+        private void CaptureLightStates(uint bakeMask, Light[] lights)
         {
             _activeLights.Clear();
 
-            var lights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (lights == null || lights.Length == 0)
+            {
+                return;
+            }
+
             for (int i = 0; i < lights.Length; i++)
             {
                 var light = lights[i];
@@ -341,7 +537,7 @@ namespace RealTimeLightBaker
                 }
             }
         }
-        internal static void NotifyBakePassFinished(CommandBuffer cmd)
+        internal static void OnBakePassFinished()
         {
             if (ActiveBakers.Count == 0)
             {
@@ -351,15 +547,14 @@ namespace RealTimeLightBaker
             for (int i = 0; i < ActiveBakers.Count; i++)
             {
                 var baker = ActiveBakers[i];
-                baker?.FinalizeBake(cmd);
+                baker?.FinalizeBake();
             }
 
             ActiveBakers.Clear();
         }
 
-        private void FinalizeBake(CommandBuffer cmd)
+        private void FinalizeBake()
         {
-            _ = cmd;
             if (!_isWaitingForPass)
             {
                 return;

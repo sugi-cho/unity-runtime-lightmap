@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -66,7 +67,12 @@ namespace RealTimeLightBaker
                 }
                 drawingSettings.overrideMaterial = _settings.bakeMaterial;
                 drawingSettings.overrideMaterialPassIndex = 0;
-                drawingSettings.perObjectData = PerObjectData.LightData | PerObjectData.LightIndices | PerObjectData.ShadowMask | PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.OcclusionProbe;
+                var perObjectData = PerObjectData.LightData | PerObjectData.LightIndices | PerObjectData.ShadowMask | PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.OcclusionProbe;
+                if (Enum.TryParse("RenderingLayers", out PerObjectData renderingLayersFlag))
+                {
+                    perObjectData |= renderingLayersFlag;
+                }
+                drawingSettings.perObjectData = perObjectData;
 
                 var cullResults = renderingData.cullResults;
                 var cmd = CommandBufferPool.Get(_profilingSampler.name);
@@ -96,7 +102,7 @@ namespace RealTimeLightBaker
                         context.ExecuteCommandBuffer(cmd);
                         cmd.Clear();
 
-                        var filteringSettings = new FilteringSettings(RenderQueueRange.all, target.LayerMask, target.RenderingLayerMask);
+                        var filteringSettings = new FilteringSettings(RenderQueueRange.all, -1, target.RenderingLayerMask);
                         context.DrawRenderers(cullResults, ref drawingSettings, ref filteringSettings);
 
                         if (_settings.enableDilation && _settings.dilationMaterial != null)
@@ -136,7 +142,7 @@ namespace RealTimeLightBaker
 
             public override void OnCameraCleanup(CommandBuffer cmd)
             {
-                RuntimeLightmapBaker.NotifyBakePassFinished(cmd);
+                RuntimeLightmapBaker.OnBakePassFinished();
             }
         }
 
@@ -160,6 +166,7 @@ namespace RealTimeLightBaker
         {
             if (_pendingTargets.Count == 0 || settings.bakeMaterial == null)
             {
+                _pendingTargets.Clear();
                 return;
             }
 
@@ -191,26 +198,22 @@ namespace RealTimeLightBaker
 
         public readonly struct BakeTarget
         {
-            public BakeTarget(Renderer renderer, RenderTexture renderTexture, bool clear, Color clearColor, Rect viewport, uint renderingLayerMask)
+            public BakeTarget(RenderTexture renderTexture, bool clear, Color clearColor, Rect viewport, uint renderingLayerMask)
             {
-                Renderer = renderer;
                 RenderTexture = renderTexture;
                 Clear = clear;
                 ClearColor = clearColor;
                 Viewport = viewport;
                 HasViewport = viewport.width > 0f && viewport.height > 0f;
                 RenderingLayerMask = renderingLayerMask;
-                LayerMask = renderer != null ? 1 << renderer.gameObject.layer : ~0;
             }
 
-            public Renderer Renderer { get; }
             public RenderTexture RenderTexture { get; }
             public bool Clear { get; }
             public Color ClearColor { get; }
             public Rect Viewport { get; }
             public bool HasViewport { get; }
             public uint RenderingLayerMask { get; }
-            public int LayerMask { get; }
         }
     }
 }

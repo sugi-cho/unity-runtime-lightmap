@@ -28,7 +28,9 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile_fragment _ _FORWARD_PLUS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile_fragment _ _LIGHT_LAYERS
             #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -87,25 +89,31 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 return output;
             }
 
-            half4 frag(Varyings input) : SV_Target
+            half4 frag(Varyings input, bool isFrontFace : SV_IsFrontFace) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(input);
 
                 float4 albedoSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv0) * _BaseColor;
                 clip(albedoSample.a - _Cutoff);
 
-                float3 normalWS = SafeNormalize(input.normalWS);
+                float3 N = SafeNormalize(input.normalWS);
+                N *= (isFrontFace ? 1.0 : -1.0);
 
                 Light mainLight = GetMainLight(input.shadowCoord);
-                float3 lighting = saturate(dot(normalWS, -mainLight.direction)) * mainLight.color * mainLight.shadowAttenuation;
+                float3 lighting = float3(0.0, 0.0, 0.0);
 
+                float ndotlMain = saturate(dot(N, mainLight.direction));
+                lighting += ndotlMain * mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
+
+            #ifdef _ADDITIONAL_LIGHTS
                 uint additionalCount = GetAdditionalLightsCount();
                 [loop] for (uint li = 0u; li < additionalCount; ++li)
                 {
                     Light lightData = GetAdditionalLight(li, input.positionWS);
-                    float ndotl = saturate(dot(normalWS, -lightData.direction));
-                    lighting += ndotl * lightData.color * lightData.shadowAttenuation;
+                    float ndotl = saturate(dot(N, lightData.direction));
+                    lighting += ndotl * lightData.color * lightData.distanceAttenuation * lightData.shadowAttenuation;
                 }
+            #endif
 
                 float3 baked = lighting;
                 float3 outColor = lerp(baked, baked * albedoSample.rgb, saturate(_MultiplyAlbedo));
