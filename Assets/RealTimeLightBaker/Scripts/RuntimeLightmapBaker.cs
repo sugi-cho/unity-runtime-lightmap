@@ -336,10 +336,14 @@ namespace RealTimeLightBaker
             return usedMask;
         }
 
+        public static uint ToValidRenderingLayers(uint renderingLayers)
+        {
+            uint validRenderingLayers = RenderingLayerMask.GetDefinedRenderingLayersCombinedMaskValue();
+            return validRenderingLayers & renderingLayers;
+        }
         private static uint SanitizeRenderingLayerMask(uint mask)
         {
-            // mask = RenderingLayerUtils.ToValidRenderingLayers(mask);
-            return mask == uint.MaxValue ? 0u : mask;
+            return ToValidRenderingLayers(mask);
         }
 
         private static uint SanitizeRenderingLayerMask(RenderingLayerMask mask)
