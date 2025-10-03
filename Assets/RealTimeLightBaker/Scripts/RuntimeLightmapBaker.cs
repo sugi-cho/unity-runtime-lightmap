@@ -119,7 +119,7 @@ namespace RealTimeLightBaker
         /// <summary>
         /// Returns the runtime lightmap associated with the given renderer, or null if none exists.
         /// </summary>
-        public RenderTexture GetLightmap(Renderer renderer\)
+        public RenderTexture GetLightmap(Renderer renderer)
         {
             if (renderer == null)
             {
@@ -354,7 +354,7 @@ namespace RealTimeLightBaker
             return fallback;
         }
 
-        private static ScriptableRendererData TryGetDefaultRendererData(UniversalRenderPipelineAsset asset\)
+        private static ScriptableRendererData TryGetDefaultRendererData(UniversalRenderPipelineAsset asset)
         {
             if (asset == null)
             {
@@ -500,7 +500,7 @@ namespace RealTimeLightBaker
                 _activeLights.Add(state);
             }
         }
-        private void CancelActiveSession(\)
+        private void CancelActiveSession()
         {
             if (!_isWaitingForPass)
             {
@@ -546,7 +546,7 @@ namespace RealTimeLightBaker
                 }
             }
         }
-        internal static void OnBakePassFinished(\)
+        internal static void OnBakePassFinished()
         {
             if (ActiveBakers.Count == 0)
             {
@@ -562,7 +562,7 @@ namespace RealTimeLightBaker
             ActiveBakers.Clear();
         }
 
-        private void FinalizeBake(\)
+        private void FinalizeBake()
         {
             if (!_isWaitingForPass)
             {
@@ -590,7 +590,7 @@ namespace RealTimeLightBaker
             _forceBake = false;
         }
 
-        private bool ShouldBakeThisCamera(Camera camera\)
+        private bool ShouldBakeThisCamera(Camera camera)
         {
             if (camera == null)
             {
@@ -664,7 +664,7 @@ namespace RealTimeLightBaker
             return hasValid;
         }
 
-        private RenderTexture CreateRenderTexture(int size\)
+        private RenderTexture CreateRenderTexture(int size)
         {
             if (size <= 0)
             {
@@ -684,7 +684,7 @@ namespace RealTimeLightBaker
             return rt;
         }
 
-        private void ReleaseAllRenderTextures(\)
+        private void ReleaseAllRenderTextures()
         {
             if (targets == null)
             {
@@ -697,7 +697,7 @@ namespace RealTimeLightBaker
             }
         }
 
-        private void ReleaseRenderTexture(TargetEntry entry\)
+        private void ReleaseRenderTexture(TargetEntry entry)
         {
             if (entry == null)
             {
@@ -729,7 +729,7 @@ namespace RealTimeLightBaker
             entry.lightmap = null;
         }
 
-        private void ApplyToTargets(\)
+        private void ApplyToTargets()
         {
             if (targets == null)
             {
@@ -760,7 +760,7 @@ namespace RealTimeLightBaker
             entry.renderer.SetPropertyBlock(entry.mpb);
         }
 
-        private void CachePropertyId(\)
+        private void CachePropertyId()
         {
             if (string.IsNullOrEmpty(runtimeLightmapProperty))
             {
@@ -771,6 +771,7 @@ namespace RealTimeLightBaker
         }
     }
 }
+
 
 
 
