@@ -298,7 +298,7 @@ namespace RealTimeLightBaker
                         continue;
                     }
 
-                    usedMask |= entry.renderer.renderingLayerMask;
+                    usedMask |= SanitizeRenderingLayerMask(entry.renderer.renderingLayerMask);
                 }
             }
 
@@ -312,12 +312,12 @@ namespace RealTimeLightBaker
                         continue;
                     }
 
-                    usedMask |= (uint)light.renderingLayerMask;
+                    usedMask |= SanitizeRenderingLayerMask((uint)light.renderingLayerMask);
 
                     if (light.TryGetComponent(out UniversalAdditionalLightData additionalData))
                     {
-                        usedMask |= (uint)additionalData.renderingLayers;
-                        usedMask |= (uint)additionalData.shadowRenderingLayers;
+                        usedMask |= SanitizeRenderingLayerMask(additionalData.renderingLayers);
+                        usedMask |= SanitizeRenderingLayerMask(additionalData.shadowRenderingLayers);
                     }
                 }
             }
@@ -334,6 +334,17 @@ namespace RealTimeLightBaker
             }
 
             return usedMask;
+        }
+
+        private static uint SanitizeRenderingLayerMask(uint mask)
+        {
+            // mask = RenderingLayerUtils.ToValidRenderingLayers(mask);
+            return mask == uint.MaxValue ? 0u : mask;
+        }
+
+        private static uint SanitizeRenderingLayerMask(RenderingLayerMask mask)
+        {
+            return SanitizeRenderingLayerMask(mask.value);
         }
 
         private static uint ReserveRenderingLayerBit(ref uint usedMask)
@@ -421,7 +432,9 @@ namespace RealTimeLightBaker
                 uint layerBit = ReserveRenderingLayerBit(ref usedMask);
 
                 entry.originalRenderingLayerMask = entry.renderer.renderingLayerMask;
-                entry.renderer.renderingLayerMask = entry.originalRenderingLayerMask | layerBit;
+
+                uint sanitizedOriginalMask = SanitizeRenderingLayerMask(entry.originalRenderingLayerMask);
+                entry.renderer.renderingLayerMask = sanitizedOriginalMask | layerBit;
 
                 _combinedBakeMask |= layerBit;
                 _activeEntries.Add(entry);
