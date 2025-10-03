@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -23,6 +24,7 @@ namespace RealTimeLightBaker
             [Range(128, 4096)] public int lightmapSize = 1024;
 
             [NonSerialized] public RenderTexture lightmap;
+            [NonSerialized] public RTHandle rtHandle;
             [NonSerialized] public MaterialPropertyBlock mpb;
             [NonSerialized] public uint originalRenderingLayerMask;
         }
@@ -38,14 +40,10 @@ namespace RealTimeLightBaker
         }
 
         [SerializeField] private List<TargetEntry> targets = new();
-        [SerializeField] private Material bakerMaterial;
         [SerializeField] private bool bakeEveryFrame = true;
         [SerializeField] private bool autoApplyToTargets = true;
         [SerializeField] private string runtimeLightmapProperty = "_RuntimeLightmap";
         [SerializeField, Range(128, 4096)] private int defaultLightmapSize = 1024;
-        [Header("Optional Dilation")]
-        [SerializeField] private Material dilationMaterial;
-        [SerializeField] private int dilationPassIndex = 0;
 
         private const int MaxBakeTargets = 31;
         private const uint BakeLayerBaseBit = 1;
@@ -121,7 +119,7 @@ namespace RealTimeLightBaker
         /// <summary>
         /// Returns the runtime lightmap associated with the given renderer, or null if none exists.
         /// </summary>
-        public RenderTexture GetLightmap(Renderer renderer)
+        public RenderTexture GetLightmap(Renderer renderer\)
         {
             if (renderer == null)
             {
@@ -172,7 +170,17 @@ namespace RealTimeLightBaker
         /// </summary>
         public void SetBakerMaterial(Material material)
         {
-            bakerMaterial = material;
+            var feature = RealTimeLightBakerFeature.Instance;
+            var settings = feature?.settings;
+            if (settings != null)
+            {
+                settings.bakeMaterial = material;
+            }
+            else
+            {
+                Debug.LogWarning("RuntimeLightmapBaker: RealTimeLightBakerFeature instance is not available.");
+            }
+
             _forceBake = true;
         }
 
@@ -346,7 +354,7 @@ namespace RealTimeLightBaker
             return fallback;
         }
 
-        private static ScriptableRendererData TryGetDefaultRendererData(UniversalRenderPipelineAsset asset)
+        private static ScriptableRendererData TryGetDefaultRendererData(UniversalRenderPipelineAsset asset\)
         {
             if (asset == null)
             {
@@ -379,11 +387,11 @@ namespace RealTimeLightBaker
         private void PrepareAndEnqueueBake()
         {
             var feature = RealTimeLightBakerFeature.Instance;
-            if (feature == null || bakerMaterial == null)
+            var settings = feature?.settings;
+            if (settings == null || settings.bakeMaterial == null)
             {
                 return;
             }
-
             _activeEntries.Clear();
             _bakeTargets.Clear();
             _combinedBakeMask = 0u;
@@ -395,6 +403,11 @@ namespace RealTimeLightBaker
             foreach (var entry in targets)
             {
                 if (entry == null || entry.renderer == null || entry.lightmap == null)
+                {
+                    continue;
+                }
+
+                if (entry.rtHandle == null || entry.rtHandle.rt == null)
                 {
                     continue;
                 }
@@ -415,6 +428,7 @@ namespace RealTimeLightBaker
 
                 var bakeTarget = new RealTimeLightBakerFeature.BakeTarget(
                     entry.lightmap,
+                    entry.rtHandle,
                     clear: true,
                     Color.clear,
                     Rect.zero,
@@ -431,11 +445,6 @@ namespace RealTimeLightBaker
 
             LogPipelineSettingsOnce();
             CaptureLightStates(_combinedBakeMask, sceneLights);
-
-            feature.settings.bakeMaterial = bakerMaterial;
-            feature.settings.enableDilation = dilationMaterial != null;
-            feature.settings.dilationMaterial = dilationMaterial;
-            feature.settings.dilationPassIndex = dilationPassIndex;
 
             feature.EnqueueTargets(_bakeTargets);
 
@@ -491,7 +500,7 @@ namespace RealTimeLightBaker
                 _activeLights.Add(state);
             }
         }
-        private void CancelActiveSession()
+        private void CancelActiveSession(\)
         {
             if (!_isWaitingForPass)
             {
@@ -537,7 +546,7 @@ namespace RealTimeLightBaker
                 }
             }
         }
-        internal static void OnBakePassFinished()
+        internal static void OnBakePassFinished(\)
         {
             if (ActiveBakers.Count == 0)
             {
@@ -553,7 +562,7 @@ namespace RealTimeLightBaker
             ActiveBakers.Clear();
         }
 
-        private void FinalizeBake()
+        private void FinalizeBake(\)
         {
             if (!_isWaitingForPass)
             {
@@ -581,7 +590,7 @@ namespace RealTimeLightBaker
             _forceBake = false;
         }
 
-        private bool ShouldBakeThisCamera(Camera camera)
+        private bool ShouldBakeThisCamera(Camera camera\)
         {
             if (camera == null)
             {
@@ -593,7 +602,8 @@ namespace RealTimeLightBaker
 
         private bool ShouldBakeNow()
         {
-            if (bakerMaterial == null)
+            var settings = RealTimeLightBakerFeature.Instance?.settings;
+            if (settings == null || settings.bakeMaterial == null)
             {
                 return false;
             }
@@ -640,12 +650,21 @@ namespace RealTimeLightBaker
                     ReleaseRenderTexture(entry);
                     entry.lightmap = CreateRenderTexture(size);
                 }
+
+                if (entry.lightmap != null)
+                {
+                    if (entry.rtHandle == null || entry.rtHandle.rt != entry.lightmap)
+                    {
+                        entry.rtHandle?.Release();
+                        entry.rtHandle = RTHandles.Alloc(entry.lightmap);
+                    }
+                }
             }
 
             return hasValid;
         }
 
-        private RenderTexture CreateRenderTexture(int size)
+        private RenderTexture CreateRenderTexture(int size\)
         {
             if (size <= 0)
             {
@@ -665,7 +684,7 @@ namespace RealTimeLightBaker
             return rt;
         }
 
-        private void ReleaseAllRenderTextures()
+        private void ReleaseAllRenderTextures(\)
         {
             if (targets == null)
             {
@@ -678,9 +697,17 @@ namespace RealTimeLightBaker
             }
         }
 
-        private void ReleaseRenderTexture(TargetEntry entry)
+        private void ReleaseRenderTexture(TargetEntry entry\)
         {
-            if (entry == null || entry.lightmap == null)
+            if (entry == null)
+            {
+                return;
+            }
+
+            entry.rtHandle?.Release();
+            entry.rtHandle = null;
+
+            if (entry.lightmap == null)
             {
                 return;
             }
@@ -702,7 +729,7 @@ namespace RealTimeLightBaker
             entry.lightmap = null;
         }
 
-        private void ApplyToTargets()
+        private void ApplyToTargets(\)
         {
             if (targets == null)
             {
@@ -712,6 +739,11 @@ namespace RealTimeLightBaker
             foreach (var entry in targets)
             {
                 if (entry == null || entry.renderer == null || entry.lightmap == null)
+                {
+                    continue;
+                }
+
+                if (entry.rtHandle == null || entry.rtHandle.rt == null)
                 {
                     continue;
                 }
@@ -728,7 +760,7 @@ namespace RealTimeLightBaker
             entry.renderer.SetPropertyBlock(entry.mpb);
         }
 
-        private void CachePropertyId()
+        private void CachePropertyId(\)
         {
             if (string.IsNullOrEmpty(runtimeLightmapProperty))
             {
@@ -739,6 +771,9 @@ namespace RealTimeLightBaker
         }
     }
 }
+
+
+
 
 
 
