@@ -106,13 +106,10 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 lighting += ndotlMain * mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
 
             #ifdef _ADDITIONAL_LIGHTS
-                uint additionalCount = GetAdditionalLightsCount();
-                [loop] for (uint li = 0u; li < additionalCount; ++li)
-                {
-                    Light lightData = GetAdditionalLight(li, input.positionWS);
-                    float ndotl = saturate(dot(N, lightData.direction));
-                    lighting += ndotl * lightData.color * lightData.distanceAttenuation * lightData.shadowAttenuation;
-                }
+                LIGHT_LOOP_BEGIN(input.positionWS)
+                    float ndotl = saturate(dot(N, light.direction));
+                    lighting += ndotl * light.color * light.distanceAttenuation * light.shadowAttenuation;
+                LIGHT_LOOP_END
             #endif
 
                 float3 baked = lighting;
