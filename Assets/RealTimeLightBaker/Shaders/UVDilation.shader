@@ -24,11 +24,11 @@ Shader "Hidden/RealTimeLightBaker/UVDilation"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            TEXTURE2D(_MainTex);
-            SAMPLER(sampler_MainTex);
+            TEXTURE2D_X(_BlitTexture);
+            SAMPLER(sampler_LinearClamp);
 
             CBUFFER_START(UnityPerMaterial)
-                float4 _MainTex_TexelSize;
+                float4 _BlitTexture_TexelSize;
                 float _Radius;
                 float _AlphaThreshold;
             CBUFFER_END
@@ -55,7 +55,7 @@ Shader "Hidden/RealTimeLightBaker/UVDilation"
 
             float4 frag (Varyings i) : SV_Target
             {
-                float4 center = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv);
+                float4 center = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, i.uv);
                 const int maxRadius = 8;
                 int radius = clamp((int)round(_Radius), 0, maxRadius);
                 float threshold = saturate(_AlphaThreshold);
@@ -65,7 +65,7 @@ Shader "Hidden/RealTimeLightBaker/UVDilation"
                     return center;
                 }
 
-                float2 texel = _MainTex_TexelSize.xy;
+                float2 texel = _BlitTexture_TexelSize.xy;
 
                 float3 accum = 0;
                 float weight = 0;
@@ -80,7 +80,7 @@ Shader "Hidden/RealTimeLightBaker/UVDilation"
 
                         float2 offset = float2(x, y) * texel;
                         float2 sampleUV = i.uv + offset;
-                        float4 sampleCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, sampleUV);
+                        float4 sampleCol = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, sampleUV);
                         if (sampleCol.a > threshold)
                         {
                             accum += sampleCol.rgb;
