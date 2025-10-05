@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -57,6 +59,11 @@ namespace RealTimeLightBaker
         private uint _combinedBakeMask;
         private bool _loggedPipelineSettings;
         private int _propertyId;
+
+        /// <summary>
+        /// Returns the first lightmap render texture (for backward compatibility with previous API).
+        /// </summary>
+        public RenderTexture LightmapRT => targets.Count > 0 ? targets[0]?.lightmap : null;
 
         private void Awake()
         {
@@ -194,7 +201,11 @@ namespace RealTimeLightBaker
 
         private void LogPipelineSettingsOnce()
         {
-            if (_loggedPipelineSettings) return;
+            // Emit key URP configuration details once per lifecycle to aid debugging.
+            if (_loggedPipelineSettings)
+            {
+                return;
+            }
 
             if (UniversalRenderPipeline.asset is not UniversalRenderPipelineAsset urpAsset)
             {
@@ -203,36 +214,70 @@ namespace RealTimeLightBaker
                 return;
             }
 
-            var rendererData = urpAsset.scriptableRenderer;
-            var renderingMode = RenderingMode.Forward;
-            var usesForwardPlus = false;
+            var rendererData = TryGetDefaultRendererData(urpAsset);
+            RenderingMode renderingMode = RenderingMode.Forward;
+            bool usesForwardPlus = false;
 
             if (rendererData is UniversalRendererData universalData)
             {
                 renderingMode = universalData.renderingMode;
                 usesForwardPlus = universalData.usesClusterLightLoop;
             }
+            else if (rendererData != null)
+            {
+                var rendererType = rendererData.GetType();
+                var renderingModeProperty = rendererType.GetProperty("renderingMode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (renderingModeProperty != null && renderingModeProperty.PropertyType == typeof(RenderingMode))
+                {
+                    renderingMode = (RenderingMode)renderingModeProperty.GetValue(rendererData);
+                    usesForwardPlus = renderingMode == RenderingMode.ForwardPlus || renderingMode == RenderingMode.DeferredPlus;
+                }
+                else
+                {
+                    var usesClusterProperty = rendererType.GetProperty("usesClusterLightLoop", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (usesClusterProperty?.PropertyType == typeof(bool))
+                    {
+                        usesForwardPlus = (bool)usesClusterProperty.GetValue(rendererData);
+                    }
+                }
+            }
+            else
+            {
+                var supportsForwardPlusProperty = urpAsset.GetType().GetProperty("supportsForwardPlus", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (supportsForwardPlusProperty?.PropertyType == typeof(bool))
+                {
+                    usesForwardPlus = (bool)supportsForwardPlusProperty.GetValue(urpAsset);
+                }
 
-            Debug.Log($"RuntimeLightmapBaker: URP settings -> RendererMode={renderingMode}, ForwardPlus={usesForwardPlus}, UseRenderingLayers={urpAsset.useRenderingLayers}, AdditionalLightsMode={urpAsset.additionalLightsRenderingMode}, AdditionalLightShadows={urpAsset.supportsAdditionalLightShadows}, AdditionalLightsPerObject={urpAsset.maxAdditionalLightsCount}");
+                var renderingModeProperty = urpAsset.GetType().GetProperty("renderingMode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (renderingModeProperty?.PropertyType == typeof(RenderingMode))
+                {
+                    renderingMode = (RenderingMode)renderingModeProperty.GetValue(urpAsset);
+                }
+            }
 
-            if (!urpAsset.useRenderingLayers)
+            bool usesRenderingLayers = urpAsset.useRenderingLayers;
+            bool additionalLightsPerPixel = urpAsset.additionalLightsRenderingMode == LightRenderingMode.PerPixel;
+            bool additionalLightShadows = urpAsset.supportsAdditionalLightShadows;
+            int perObjectLimit = urpAsset.maxAdditionalLightsCount;
+
+            Debug.Log($"RuntimeLightmapBaker: URP settings -> RendererMode={renderingMode}, ForwardPlus={usesForwardPlus}, UseRenderingLayers={usesRenderingLayers}, AdditionalLightsMode={urpAsset.additionalLightsRenderingMode}, AdditionalLightShadows={additionalLightShadows}, AdditionalLightsPerObject={perObjectLimit}");
+
+            if (!usesRenderingLayers)
             {
                 Debug.LogWarning("RuntimeLightmapBaker: Use Rendering Layers is disabled on the URP asset. Enable it to ensure bake isolation.");
             }
-
-            if (urpAsset.additionalLightsRenderingMode != LightRenderingMode.PerPixel)
+            if (!additionalLightsPerPixel)
             {
                 Debug.LogWarning("RuntimeLightmapBaker: Additional Lights must be set to Per Pixel for runtime baking.");
             }
-
-            if (!urpAsset.supportsAdditionalLightShadows)
+            if (!additionalLightShadows)
             {
                 Debug.LogWarning("RuntimeLightmapBaker: Additional Light Shadows are disabled. Point/spot light shadows will not bake.");
             }
-
-            if (urpAsset.maxAdditionalLightsCount < 8)
+            if (perObjectLimit < 8)
             {
-                Debug.LogWarning($"RuntimeLightmapBaker: Additional Lights Per Object Limit is {urpAsset.maxAdditionalLightsCount}. Consider increasing it to 8 or more for stable results.");
+                Debug.LogWarning($"RuntimeLightmapBaker: Additional Lights Per Object Limit is {perObjectLimit}. Consider increasing it to 8 or more for stable results.");
             }
 
             _loggedPipelineSettings = true;
@@ -324,6 +369,39 @@ namespace RealTimeLightBaker
             return fallback;
         }
 
+        private static ScriptableRendererData TryGetDefaultRendererData(UniversalRenderPipelineAsset asset)
+        {
+            // Note: This method uses reflection to access the default renderer data from the URP asset.
+            // This is necessary because the required fields (`m_RendererDataList`, `m_DefaultRendererIndex`) are not public.
+            // This approach is brittle and may break in future URP versions if the internal API changes.
+            if (asset == null)
+            {
+                return null;
+            }
+
+            var assetType = asset.GetType();
+            var rendererProperty = assetType.GetProperty("scriptableRendererData", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (rendererProperty?.GetValue(asset) is ScriptableRendererData propertyData && propertyData != null)
+            {
+                return propertyData;
+            }
+
+            var rendererListField = assetType.GetField("m_RendererDataList", BindingFlags.Instance | BindingFlags.NonPublic);
+            var defaultIndexField = assetType.GetField("m_DefaultRendererIndex", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            if (rendererListField?.GetValue(asset) is ScriptableRendererData[] rendererArray && rendererArray.Length > 0)
+            {
+                int index = defaultIndexField != null ? (int)defaultIndexField.GetValue(asset) : 0;
+                if (index < 0 || index >= rendererArray.Length)
+                {
+                    index = 0;
+                }
+
+                return rendererArray[index];
+            }
+
+            return null;
+        }
         private void PrepareAndEnqueueBake()
         {
             var feature = RealTimeLightBakerFeature.Instance;
