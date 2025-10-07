@@ -24,31 +24,28 @@ Shader "Hidden/RealTimeLightBaker/UVDilation"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            TEXTURE2D_X(_BlitTexture);
+            TEXTURE2D(_BlitTexture);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BlitTexture_TexelSize;
                 float _Radius;
                 float _AlphaThreshold;
             CBUFFER_END
-
-            struct Attributes
-            {
-                float3 positionOS : POSITION;
-                float2 uv         : TEXCOORD0;
-            };
+            
+            struct Attributes { uint vertexID : SV_VertexID; };
 
             struct Varyings
             {
                 float4 positionCS : SV_Position;
                 float2 uv         : TEXCOORD0;
             };
-
-            Varyings vert (Attributes v)
+            
+            Varyings vert(Attributes v)
             {
                 Varyings o;
-                o.positionCS = TransformObjectToHClip(v.positionOS);
-                o.uv = v.uv;
+                // フルスクリーントライアングルの頂点IDからUVを取得する
+                o.positionCS = GetFullScreenTriangleVertexPosition(v.vertexID);
+                o.uv   = GetFullScreenTriangleTexCoord(v.vertexID);
                 return o;
             }
 
