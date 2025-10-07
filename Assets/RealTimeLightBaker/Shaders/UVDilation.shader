@@ -25,7 +25,6 @@ Shader "Hidden/RealTimeLightBaker/UVDilation"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             TEXTURE2D_X(_BlitTexture);
-            SAMPLER(sampler_LinearClamp);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BlitTexture_TexelSize;

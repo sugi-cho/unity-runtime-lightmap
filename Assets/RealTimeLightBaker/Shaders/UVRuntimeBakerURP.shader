@@ -106,7 +106,10 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 lighting += ndotlMain * mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
 
             #ifdef _ADDITIONAL_LIGHTS
-                LIGHT_LOOP_BEGIN(input.positionWS)
+                uint lightsCount = GetAdditionalLightsCount();
+                LIGHT_LOOP_BEGIN(lightsCount)
+                    // Obtain the Light struct for this loop index. Use positionWS for attenuation/shadows.
+                    Light light = GetAdditionalLight(lightIndex, input.positionWS);
                     float ndotl = saturate(dot(N, light.direction));
                     lighting += ndotl * light.color * light.distanceAttenuation * light.shadowAttenuation;
                 LIGHT_LOOP_END
