@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: SimpleLambertWithShadow
+  m_Shader: {fileID: 4800000, guid: 386a722ed7e345541bb9421eb7788fa1, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords:
+  - _RECEIVEADDITIONALSHADOW_ON
+  - _RECEIVEMAINSHADOW_ON
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AddShadowBoost: 1
+    - _AddShadowBoostIndex: -1
+    - _AddShadowGain: 1.07
+    - _AddShadowStrength: 1
+    - _AdditionalShadowMode: 1
+    - _AdditionalShadowStrength: 1
+    - _DebugShadow: 0
+    - _DiffuseStrength: 0.72
+    - _EnvReflections: 1
+    - _GlobalShadowStrength: 1
+    - _LightingMode: 0
+    - _MainShadowGain: 1.03
+    - _MainShadowStrength: 1
+    - _OutputMode: 0
+    - _ReceiveAdditionalShadow: 1
+    - _ReceiveMainShadow: 1
+    - _ReceiveShadows: 0
+    - _SpecularHighlights: 1
+    m_Colors:
+    - _BaseColor: {r: 0.8018868, g: 0.8018868, b: 0.8018868, a: 1}
+    - _ShadowColor: {r: 0, g: 0, b: 0, a: 0.75}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
