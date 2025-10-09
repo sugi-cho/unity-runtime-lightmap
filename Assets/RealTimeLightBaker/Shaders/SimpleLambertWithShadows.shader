@@ -96,7 +96,7 @@
                         #if defined(_ADDITIONAL_LIGHT_SHADOWS) && !defined(_RECEIVE_SHADOWS_OFF)
                             // ★ 可視ライトの index へ変換してからサンプリング
                             uint visibleIdx = GetPerObjectLightIndex(idx);
-                            half sRT = AdditionalLightRealtimeShadow(visibleIdx, i.positionWS, N);
+                            half sRT = AdditionalLightRealtimeShadow(visibleIdx, i.positionWS, L.direction);
                             // ★ SimpleLit と同じく “min” で統合（実装差分による二重適用ズレを防止）
                             L.shadowAttenuation = min(L.shadowAttenuation, sRT);
                         #else
