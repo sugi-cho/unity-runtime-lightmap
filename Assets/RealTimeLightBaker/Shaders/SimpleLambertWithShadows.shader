@@ -1,10 +1,8 @@
-﻿Shader "URP/SimpleLambertMinimalShadows_v6"
+﻿Shader "URP/SimpleLambertWithShadow"
 {
     Properties
     {
         [MainColor]_BaseColor("Base Color", Color) = (1,1,1,1)
-        // 1 = 影を受けない（SimpleLitと同じ）。既定 0 = 影を受ける
-        [Toggle(_RECEIVE_SHADOWS_OFF)] _DisableReceiveShadows("Disable Receive Shadows", Float) = 0
     }
 
     SubShader
@@ -23,7 +21,6 @@
             #pragma target 4.5
             #pragma multi_compile_instancing
 
-            #pragma shader_feature_local _ _RECEIVE_SHADOWS_OFF
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile _ _ADDITIONAL_LIGHTS
             #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
@@ -78,9 +75,6 @@
                 // ===== Main light =====
                 float4 sc = TransformWorldToShadowCoord(i.positionWS);
                 Light mainL = GetMainLight(sc);
-                #if defined(_RECEIVE_SHADOWS_OFF)
-                    mainL.shadowAttenuation = 1.0h;
-                #endif
                 half mainAtten = mainL.distanceAttenuation * mainL.shadowAttenuation;
                 col += ShadeLambert(albedo, N, mainL, mainAtten);
 
@@ -93,7 +87,7 @@
                         // idx は per-object index
                         Light L = GetAdditionalLight(idx, i.positionWS);
 
-                        #if defined(_ADDITIONAL_LIGHT_SHADOWS) && !defined(_RECEIVE_SHADOWS_OFF)
+                        #if defined(_ADDITIONAL_LIGHT_SHADOWS)
                             // ★ 可視ライトの index へ変換してからサンプリング
                             uint visibleIdx = GetPerObjectLightIndex(idx);
                             half sRT = AdditionalLightRealtimeShadow(visibleIdx, i.positionWS, L.direction);
