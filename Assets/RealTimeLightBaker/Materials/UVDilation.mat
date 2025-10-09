@@ -26,7 +26,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _AlphaThreshold: 0.001
-    - _Radius: 1
+    - _Radius: 4
     - _Threshold: 0.001
     m_Colors: []
   m_BuildTextureStacks: []
