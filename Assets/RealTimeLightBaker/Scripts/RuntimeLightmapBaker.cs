@@ -926,12 +926,3 @@ namespace RealTimeLightBaker
         }
     }
 }
-
-
-
-
-
-
-
-
-
