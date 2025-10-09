@@ -110,6 +110,19 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 LIGHT_LOOP_BEGIN(lightsCount)
                     // Obtain the Light struct for this loop index. Use positionWS for attenuation/shadows.
                     Light light = GetAdditionalLight(lightIndex, input.positionWS);
+
+                    // If additional-light shadows are enabled, sample the realtime shadow for the
+                    // visible-light index. Additional lights are provided to the shader as per-object
+                    // indices, so we must convert to the visible index before sampling.
+                    #if defined(_ADDITIONAL_LIGHT_SHADOWS)
+                        uint visibleIdx = GetPerObjectLightIndex(lightIndex);
+                        half sRT = AdditionalLightRealtimeShadow(visibleIdx, input.positionWS, light.direction);
+                        // Combine conservatively with the light's built-in shadowAttenuation
+                        light.shadowAttenuation = min(light.shadowAttenuation, sRT);
+                    #else
+                        light.shadowAttenuation = 1.0h;
+                    #endif
+
                     float ndotl = saturate(dot(N, light.direction));
                     lighting += ndotl * light.color * light.distanceAttenuation * light.shadowAttenuation;
                 LIGHT_LOOP_END
