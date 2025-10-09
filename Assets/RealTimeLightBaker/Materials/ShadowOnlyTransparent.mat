@@ -29,6 +29,6 @@ Material:
     - _ShadowOpacity: 1
     m_Colors:
     - _ShadowColor: {r: 0, g: 0, b: 0, a: 0.6}
-    - _ShadowTint: {r: 0, g: 0, b: 0, a: 1}
+    - _ShadowTint: {r: 1, g: 0.2688679, b: 0.80830455, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
