@@ -106,15 +106,52 @@
                 }
                 #endif
 
-                
-                half visibility = saturate(visMain * visAddProduct);
+                // Compute blocked light amount based on per-light contributions.
+                float3 lumWeights = float3(0.2126, 0.7152, 0.0722);
 
-                
-                half shadowAmount = saturate((1.0h - visibility) * _ShadowOpacity);
+                // Main light contribution
+                half ndlMain = saturate(dot(IN.normalWS, mainL.direction));
+                float mainContrib = dot(mainL.color, lumWeights) * mainL.distanceAttenuation * ndlMain;
+                float mainBlocked = mainContrib * (1.0h - visMain);
 
-                
-                half3 rgb = _ShadowTint.rgb * shadowAmount;
-                return half4(rgb, shadowAmount);
+                // Additional lights contribution
+                float addBlocked = 0.0f;
+                #ifdef _ADDITIONAL_LIGHTS
+                {
+                    uint count = GetAdditionalLightsCount();
+                    [loop] for (uint perObj = 0u; perObj < count; ++perObj)
+                    {
+                        Light addL = GetAdditionalLight(perObj, IN.positionWS);
+                        half ndl = saturate(dot(IN.normalWS, addL.direction));
+                        float contrib = dot(addL.color, lumWeights) * addL.distanceAttenuation * ndl;
+                        half vis = 1.0h;
+                        #if defined(_ADDITIONAL_LIGHT_SHADOWS)
+                            uint visibleIdx = GetPerObjectLightIndex(perObj);
+                            vis = AdditionalLightRealtimeShadow(visibleIdx, IN.positionWS, addL.direction);
+                        #endif
+                        addBlocked += contrib * (1.0h - vis);
+                    }
+                }
+                #endif
+
+                float blockedStrength = saturate(mainBlocked + addBlocked);
+
+                // If blockedStrength >= 1: amplify RGB by blockedStrength (can exceed 1)
+                // If blockedStrength < 1: fade out alpha by blockedStrength
+                half3 outRGB;
+                half outA;
+                if (blockedStrength >= 1.0)
+                {
+                    outRGB = _ShadowTint.rgb * blockedStrength;
+                    outA = _ShadowOpacity;
+                }
+                else
+                {
+                    outRGB = _ShadowTint.rgb;
+                    outA = _ShadowOpacity * (half)blockedStrength;
+                }
+
+                return half4(outRGB, outA);
             }
             ENDHLSL
         }
