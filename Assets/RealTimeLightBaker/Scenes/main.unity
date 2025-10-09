@@ -763,6 +763,18 @@ MonoBehaviour:
             m_StringArgument: 
             m_BoolArgument: 0
           m_CallState: 1
+        - m_Target: {fileID: 1132888624}
+          m_TargetAssemblyTypeName: TextureBlitter, Assembly-CSharp
+          m_MethodName: set_Texture
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 1
   OnLightmapCreated:
     m_PersistentCalls:
       m_Calls: []
@@ -980,7 +992,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 1.0374e-41, y: 2.524355e-29, z: 0, w: 6.573344e+28}
+  m_BoundingSphereOverride: {x: 1.1467e-41, y: 2.524355e-29, z: 0, w: 1.8220461e+29}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -1786,7 +1798,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 9.12e-43, y: 1.8221776e+29, z: 9.12e-43, w: 1.8221776e+29}
+  m_BoundingSphereOverride: {x: 9.12e-43, y: 3.775442e+29, z: 9.12e-43, w: 1.8464877e+25}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -1994,6 +2006,7 @@ GameObject:
   - component: {fileID: 1132888623}
   - component: {fileID: 1132888622}
   - component: {fileID: 1132888621}
+  - component: {fileID: 1132888624}
   m_Layer: 0
   m_Name: Capsule_tex (1)
   m_TagString: Untagged
@@ -2085,6 +2098,19 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1132888619}
   m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1132888624
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1132888619}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50cd0cf09de983e41924df2df82e6225, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TextureBlitter
+  targetTexture: {fileID: 8400000, guid: 24a9c14400103184f9602bc1ff929393, type: 2}
 --- !u!1 &1236006430
 GameObject:
   m_ObjectHideFlags: 0
@@ -2342,7 +2368,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: -2.4405384e-30, y: 9.188e-41, z: 1.744874e-39, w: 1.5985219e-32}
+  m_BoundingSphereOverride: {x: 1.1558e-41, y: 2.524355e-29, z: 0, w: 7.715509e+31}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0

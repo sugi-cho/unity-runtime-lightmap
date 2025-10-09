@@ -6,10 +6,12 @@ This tool is designed for scenarios where lighting conditions can change dynamic
 
 ## Screenshots
 
-*(Space for future screenshots)*
+![screencapture](docs/images/screencapture.gif)
 
-![Screenshot 1](docs/images/screenshot1.png)
-![Screenshot 2](docs/images/screenshot2.png)
+| Lighting Scene | Baked Lightmap Texture |
+|:-:|:-:|
+| ![Screenshot 1](docs/images/screenshot1.png) | ![Screenshot 2](docs/images/screenshot2.png)|
+
 
 ## Core Logic
 
