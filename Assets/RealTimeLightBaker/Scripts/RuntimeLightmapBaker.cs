@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.Rendering;
+using UnityEngine.Events;
 using UnityEngine.Rendering.Universal;
 
 namespace RealTimeLightBaker
@@ -27,6 +28,7 @@ namespace RealTimeLightBaker
             [NonSerialized] public RTHandle rtHandle;
             [NonSerialized] public MaterialPropertyBlock mpb;
             [NonSerialized] public uint originalRenderingLayerMask;
+            [SerializeField] public UnityEvent<Texture> OnLightmapCreatedForTarget = new UnityEvent<Texture>();
         }
 
         private sealed class LightState
@@ -39,7 +41,8 @@ namespace RealTimeLightBaker
             public RenderingLayerMask originalShadowRenderingLayers;
         }
 
-        [SerializeField] private List<TargetEntry> targets = new();
+    [SerializeField] private List<TargetEntry> targets = new();
+    [SerializeField] public UnityEvent<Texture> OnLightmapCreated = new UnityEvent<Texture>();
         [SerializeField] private bool bakeEveryFrame = true;
         [SerializeField] private bool autoApplyToTargets = true;
         [SerializeField] private string runtimeLightmapProperty = "_RuntimeLightmap";
@@ -665,10 +668,12 @@ namespace RealTimeLightBaker
                     entry.lightmapSize = size;
                 }
 
+                bool createdThisEntry = false;
                 if (entry.lightmap == null || entry.lightmap.width != size || entry.lightmap.height != size)
                 {
                     ReleaseRenderTexture(entry);
                     entry.lightmap = CreateRenderTexture(size);
+                    createdThisEntry = entry.lightmap != null;
                 }
 
                 if (entry.lightmap != null)
@@ -677,6 +682,31 @@ namespace RealTimeLightBaker
                     {
                         entry.rtHandle?.Release();
                         entry.rtHandle = RTHandles.Alloc(entry.lightmap);
+                    }
+
+                    if (createdThisEntry)
+                    {
+                        // Invoke per-target event
+                        try
+                        {
+                            entry.OnLightmapCreatedForTarget?.Invoke(entry.lightmap);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex);
+                        }
+
+                        // Backwards-compatible single-texture event
+                        try
+                        {
+                            OnLightmapCreated?.Invoke(entry.lightmap);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex);
+                        }
+
+                        // (Removed class-level array event per user request)
                     }
                 }
             }
@@ -701,6 +731,7 @@ namespace RealTimeLightBaker
             };
 
             rt.Create();
+
             return rt;
         }
 
