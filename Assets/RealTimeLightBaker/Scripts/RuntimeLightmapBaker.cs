@@ -44,6 +44,7 @@ namespace RealTimeLightBaker
 
     [SerializeField] private List<TargetEntry> targets = new();
     [SerializeField] public UnityEvent<Texture> OnLightmapCreated = new UnityEvent<Texture>();
+    [SerializeField] private bool autoFixConflictingRenderingLayers = true;
         [SerializeField] private bool bakeEveryFrame = true;
         [SerializeField] private bool autoApplyToTargets = true;
         [SerializeField] private string runtimeLightmapProperty = "_RuntimeLightmap";
@@ -144,6 +145,72 @@ namespace RealTimeLightBaker
 
                 uint sanitizedOriginalMask = SanitizeRenderingLayerMask(entry.originalRenderingLayerMask);
                 entry.renderer.renderingLayerMask = sanitizedOriginalMask | bit;
+            }
+
+            // After assigning bits to targets, detect other renderers that accidentally include
+            // these bake bits and either warn or auto-fix them depending on configuration.
+            DetectAndFixRenderingLayerConflicts();
+        }
+
+        private void DetectAndFixRenderingLayerConflicts()
+        {
+            // Build a mask of all bake bits assigned by this baker
+            uint bakeBits = 0u;
+            if (targets != null)
+            {
+                foreach (var t in targets)
+                {
+                    if (t != null)
+                        bakeBits |= t.assignedBakeLayerBit;
+                }
+            }
+
+            if (bakeBits == 0u)
+                return;
+
+            // Find all renderers in the scene and check for conflicts
+            var allRenderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+            foreach (var r in allRenderers)
+            {
+                if (r == null)
+                    continue;
+
+                // If this renderer is one of our targets, skip
+                bool isTarget = false;
+                if (targets != null)
+                {
+                    foreach (var t in targets)
+                    {
+                        if (t != null && t.renderer == r)
+                        {
+                            isTarget = true;
+                            break;
+                        }
+                    }
+                }
+                if (isTarget)
+                    continue;
+
+                uint rendererMask = SanitizeRenderingLayerMask((uint)r.renderingLayerMask);
+                uint conflict = rendererMask & bakeBits;
+                if (conflict != 0u)
+                {
+                    string msg = $"RuntimeLightmapBaker: Renderer '{r.name}' has bake rendering layer bits set that belong to bake targets. ";
+                    if (autoFixConflictingRenderingLayers)
+                    {
+                        uint fixedMask = rendererMask & ~bakeBits;
+                        // Apply only the sanitized fixed mask back to the renderer
+                        r.renderingLayerMask = (RenderingLayerMask)fixedMask;
+                        msg += "Auto-fixed by removing bake bits from this renderer.";
+                    }
+                    else
+                    {
+                        msg += "Consider enabling auto-fix or remove bake bits from this renderer to avoid unintended baking.";
+                    }
+
+                    Debug.LogWarning(msg, r);
+                }
             }
         }
 
@@ -337,7 +404,7 @@ namespace RealTimeLightBaker
                         continue;
                     }
 
-                    usedMask |= SanitizeRenderingLayerMask(entry.renderer.renderingLayerMask);
+                    usedMask |= SanitizeRenderingLayerMask((uint)entry.renderer.renderingLayerMask);
                 }
             }
 
