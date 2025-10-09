@@ -28,7 +28,8 @@ namespace RealTimeLightBaker
             [NonSerialized] public RTHandle rtHandle;
             [NonSerialized] public MaterialPropertyBlock mpb;
             [NonSerialized] public uint originalRenderingLayerMask;
-            [SerializeField] public UnityEvent<Texture> OnLightmapCreatedForTarget = new UnityEvent<Texture>();
+        [SerializeField] public UnityEvent<Texture> OnLightmapCreatedForTarget = new UnityEvent<Texture>();
+        [NonSerialized] public uint assignedBakeLayerBit;
         }
 
         private sealed class LightState
@@ -63,11 +64,6 @@ namespace RealTimeLightBaker
         private bool _loggedPipelineSettings;
         private int _propertyId;
 
-        /// <summary>
-        /// Returns the first lightmap render texture (for backward compatibility with previous API).
-        /// </summary>
-        public RenderTexture LightmapRT => targets.Count > 0 ? targets[0]?.lightmap : null;
-
         private void Awake()
         {
             CachePropertyId();
@@ -77,6 +73,7 @@ namespace RealTimeLightBaker
         {
             CachePropertyId();
             EnsureResources();
+            AssignRenderingLayerBitsToTargets();
             RenderPipelineManager.beginCameraRendering += HandleBeginCameraRendering;
             _forceBake = true;
         }
@@ -107,8 +104,47 @@ namespace RealTimeLightBaker
                 }
             }
 
+            AssignRenderingLayerBitsToTargets();
             EnsureResources();
             _forceBake = true;
+        }
+
+        private void AssignRenderingLayerBitsToTargets()
+        {
+            // Reserve bits based on currently used layers in the scene to avoid collisions.
+            var sceneLights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            uint usedMask = CollectUsedRenderingLayers(sceneLights);
+
+            if (targets == null)
+                return;
+
+            for (int i = 0; i < targets.Count; i++)
+            {
+                var entry = targets[i];
+                if (entry == null || entry.renderer == null)
+                    continue;
+
+                // If already assigned and the bit is still free (not used by others), keep it.
+                if (entry.assignedBakeLayerBit != 0u)
+                {
+                    if ((usedMask & entry.assignedBakeLayerBit) == 0u)
+                    {
+                        usedMask |= entry.assignedBakeLayerBit;
+                        continue;
+                    }
+                    // assigned bit is now taken, clear and reassign below
+                    entry.assignedBakeLayerBit = 0u;
+                }
+
+                uint bit = ReserveRenderingLayerBit(ref usedMask);
+                entry.assignedBakeLayerBit = bit;
+
+                // Ensure we don't permanently overwrite user masks; store original when needed elsewhere
+                entry.originalRenderingLayerMask = entry.renderer.renderingLayerMask;
+
+                uint sanitizedOriginalMask = SanitizeRenderingLayerMask(entry.originalRenderingLayerMask);
+                entry.renderer.renderingLayerMask = sanitizedOriginalMask | bit;
+            }
         }
 
         /// <summary>
@@ -439,10 +475,11 @@ namespace RealTimeLightBaker
                     break;
                 }
 
-                uint layerBit = ReserveRenderingLayerBit(ref usedMask);
+                // Prefer the bake bit assigned at OnValidate/OnEnable. If none, reserve one now.
+                uint layerBit = entry.assignedBakeLayerBit != 0u ? entry.assignedBakeLayerBit : ReserveRenderingLayerBit(ref usedMask);
 
+                // Store original mask for restoration and apply only the bake bit (preserving other valid bits).
                 entry.originalRenderingLayerMask = entry.renderer.renderingLayerMask;
-
                 uint sanitizedOriginalMask = SanitizeRenderingLayerMask(entry.originalRenderingLayerMask);
                 entry.renderer.renderingLayerMask = sanitizedOriginalMask | layerBit;
 
