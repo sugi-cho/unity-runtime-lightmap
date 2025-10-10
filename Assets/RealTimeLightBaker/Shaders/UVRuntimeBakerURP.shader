@@ -3,6 +3,8 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
     Properties
     {
         _BaseMap ("Base Map (albedo)", 2D) = "white" {}
+        _BumpMap ("Normal Map", 2D) = "bump" {}
+        _SpecGlossMap ("Specular", 2D) = "white" {}
         _BaseColor ("Base Color", Color) = (1,1,1,1)
         _Cutoff ("Alpha Cutoff", Range(0,1)) = 0
         _MultiplyAlbedo ("Multiply Albedo", Range(0,1)) = 1
@@ -36,11 +38,14 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            TEXTURE2D(_BaseMap);
-            SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_BaseMap);        SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_BumpMap);        SAMPLER(sampler_BumpMap);
+            TEXTURE2D(_SpecGlossMap);   SAMPLER(sampler_SpecGlossMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
+                float4 _BumpMap_ST;
+                float4 _SpecGlossMap_ST;
                 float4 _BaseColor;
                 float _Cutoff;
                 float _MultiplyAlbedo;
@@ -59,11 +64,13 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
 
             struct Varyings
             {
-                float4 positionCS  : SV_POSITION;
-                float2 uv0         : TEXCOORD0;
-                float3 positionWS  : TEXCOORD1;
-                float3 normalWS    : TEXCOORD2;
-                float4 shadowCoord : TEXCOORD3;
+                float4 positionCS   : SV_POSITION;
+                float2 uv0          : TEXCOORD0;
+                float3 positionWS   : TEXCOORD1;
+                float3 normalWS     : TEXCOORD2;
+                float4 shadowCoord  : TEXCOORD3;
+                float3 tangentWS    : TEXCOORD4;
+                float3 bitangentWS  : TEXCOORD5;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -86,6 +93,8 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 output.positionWS = posInputs.positionWS;
                 output.normalWS = normalize(normalInputs.normalWS);
                 output.shadowCoord = TransformWorldToShadowCoord(output.positionWS);
+                output.tangentWS = normalInputs.tangentWS;
+                output.bitangentWS = normalInputs.bitangentWS;
                 return output;
             }
 
@@ -95,9 +104,12 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
 
                 float4 albedoSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv0) * _BaseColor;
                 clip(albedoSample.a - _Cutoff);
+                
+                float4 specGlossSample = SAMPLE_TEXTURE2D(_SpecGlossMap, sampler_SpecGlossMap, input.uv0);
 
-                float3 N = SafeNormalize(input.normalWS);
-                N *= (isFrontFace ? 1.0 : -1.0);
+                float3 normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv0));
+                float3x3 tbn = CreateTangentToWorld(input.normalWS, input.tangentWS, isFrontFace ? 1.0 : -1.0);
+                float3 N = TransformTangentToWorld(normalTS, tbn);
 
                 Light mainLight = GetMainLight(input.shadowCoord);
                 float3 lighting = float3(0.0, 0.0, 0.0);
@@ -108,16 +120,10 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             #ifdef _ADDITIONAL_LIGHTS
                 uint lightsCount = GetAdditionalLightsCount();
                 LIGHT_LOOP_BEGIN(lightsCount)
-                    // Obtain the Light struct for this loop index. Use positionWS for attenuation/shadows.
                     Light light = GetAdditionalLight(lightIndex, input.positionWS);
-
-                    // If additional-light shadows are enabled, sample the realtime shadow for the
-                    // visible-light index. Additional lights are provided to the shader as per-object
-                    // indices, so we must convert to the visible index before sampling.
                     #if defined(_ADDITIONAL_LIGHT_SHADOWS)
                         uint visibleIdx = GetPerObjectLightIndex(lightIndex);
                         half sRT = AdditionalLightRealtimeShadow(visibleIdx, input.positionWS, light.direction);
-                        // Combine conservatively with the light's built-in shadowAttenuation
                         light.shadowAttenuation = min(light.shadowAttenuation, sRT);
                     #else
                         light.shadowAttenuation = 1.0h;
@@ -127,6 +133,10 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                     lighting += ndotl * light.color * light.distanceAttenuation * light.shadowAttenuation;
                 LIGHT_LOOP_END
             #endif
+
+                // TODO: Use specGlossSample for specular lighting calculation if needed.
+                // float3 specular = specGlossSample.rgb;
+                // float smoothness = specGlossSample.a;
 
                 float3 baked = lighting;
                 float3 outColor = lerp(baked, baked * albedoSample.rgb, saturate(_MultiplyAlbedo));
