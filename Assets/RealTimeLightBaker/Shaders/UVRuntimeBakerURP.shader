@@ -30,7 +30,7 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
-            #pragma multi_compile_fragment _ _FORWARD_PLUS
+            #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile_fragment _ _LIGHT_LAYERS
             #pragma multi_compile_instancing
@@ -41,6 +41,9 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             TEXTURE2D(_BaseMap);        SAMPLER(sampler_BaseMap);
             TEXTURE2D(_BumpMap);        SAMPLER(sampler_BumpMap);
             TEXTURE2D(_SpecGlossMap);   SAMPLER(sampler_SpecGlossMap);
+            TEXTURE2D(_RTLB_BaseMap);   SAMPLER(sampler_RTLB_BaseMap);
+            TEXTURE2D(_RTLB_BumpMap);   SAMPLER(sampler_RTLB_BumpMap);
+            TEXTURE2D(_RTLB_SpecGlossMap); SAMPLER(sampler_RTLB_SpecGlossMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
@@ -51,6 +54,10 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 float _MultiplyAlbedo;
                 float _FlipY;
             CBUFFER_END
+
+            float4 _RTLB_BaseMap_ST;
+            float4 _RTLB_BumpMap_ST;
+            float4 _RTLB_SpecGlossMap_ST;
 
             struct Attributes
             {
@@ -89,7 +96,7 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 uv.y = (_FlipY > 0.5f) ? (1.0f - uv.y) : uv.y;
 
                 output.positionCS = float4(uv * 2.0f - 1.0f, 0.0f, 1.0f);
-                output.uv0 = TRANSFORM_TEX(input.uv0, _BaseMap);
+                output.uv0 = input.uv0;
                 output.positionWS = posInputs.positionWS;
                 output.normalWS = normalize(normalInputs.normalWS);
                 output.shadowCoord = TransformWorldToShadowCoord(output.positionWS);
@@ -102,12 +109,15 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             {
                 UNITY_SETUP_INSTANCE_ID(input);
 
-                float4 albedoSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv0) * _BaseColor;
+                float2 uvBase = input.uv0 * _RTLB_BaseMap_ST.xy + _RTLB_BaseMap_ST.zw;
+                float4 albedoSample = SAMPLE_TEXTURE2D(_RTLB_BaseMap, sampler_RTLB_BaseMap, uvBase) * _BaseColor;
                 clip(albedoSample.a - _Cutoff);
-                
-                float4 specGlossSample = SAMPLE_TEXTURE2D(_SpecGlossMap, sampler_SpecGlossMap, input.uv0);
 
-                float3 normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv0));
+                float2 uvSpec = input.uv0 * _RTLB_SpecGlossMap_ST.xy + _RTLB_SpecGlossMap_ST.zw;
+                float4 specGlossSample = SAMPLE_TEXTURE2D(_RTLB_SpecGlossMap, sampler_RTLB_SpecGlossMap, uvSpec);
+
+                float2 uvBump = input.uv0 * _RTLB_BumpMap_ST.xy + _RTLB_BumpMap_ST.zw;
+                float3 normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_RTLB_BumpMap, sampler_RTLB_BumpMap, uvBump));
                 float3x3 tbn = CreateTangentToWorld(input.normalWS, input.tangentWS, isFrontFace ? 1.0 : -1.0);
                 float3 N = TransformTangentToWorld(normalTS, tbn);
 

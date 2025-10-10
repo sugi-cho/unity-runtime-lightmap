@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -32,6 +32,12 @@ namespace RealTimeLightBaker
                 new ShaderTagId("UniversalForwardOnly"),
                 new ShaderTagId("SRPDefaultUnlit")
             };
+            private static readonly int BaseMapId = Shader.PropertyToID("_RTLB_BaseMap");
+            private static readonly int BumpMapId = Shader.PropertyToID("_RTLB_BumpMap");
+            private static readonly int SpecGlossMapId = Shader.PropertyToID("_RTLB_SpecGlossMap");
+            private static readonly int BaseMapStId = Shader.PropertyToID("_RTLB_BaseMap_ST");
+            private static readonly int BumpMapStId = Shader.PropertyToID("_RTLB_BumpMap_ST");
+            private static readonly int SpecGlossMapStId = Shader.PropertyToID("_RTLB_SpecGlossMap_ST");
 
             public BakePass(Settings settings)
             {
@@ -61,6 +67,12 @@ namespace RealTimeLightBaker
                 public bool hasViewport;
                 public Rect viewport;
                 public Vector2Int size;
+                public TextureHandle baseMap;
+                public TextureHandle bumpMap;
+                public TextureHandle specGlossMap;
+                public Vector4 baseMapST;
+                public Vector4 bumpMapST;
+                public Vector4 specGlossMapST;
             }
 
             private sealed class DilationPassData
@@ -126,6 +138,9 @@ namespace RealTimeLightBaker
                     var targetTextureHandle = renderGraph.ImportTexture(target.RenderTargetHandle);
                     var viewport = target.HasViewport ? target.Viewport : new Rect(0f, 0f, target.RenderTexture.width, target.RenderTexture.height);
                     var size = new Vector2Int(target.RenderTexture.width, target.RenderTexture.height);
+                    var baseMapHandle = renderGraph.ImportTexture(target.BaseMap);
+                    var bumpMapHandle = renderGraph.ImportTexture(target.BumpMap);
+                    var specGlossMapHandle = renderGraph.ImportTexture(target.SpecGlossMap);
 
                     using (var builder = renderGraph.AddRasterRenderPass<RenderGraphPassData>($"Runtime Lightmap Bake (Target {targetIndex})", out var passData, _profilingSampler))
                     {
@@ -136,9 +151,19 @@ namespace RealTimeLightBaker
                         passData.hasViewport = target.HasViewport;
                         passData.viewport = viewport;
                         passData.size = size;
+                        passData.baseMap = baseMapHandle;
+                        passData.bumpMap = bumpMapHandle;
+                        passData.specGlossMap = specGlossMapHandle;
+                        passData.baseMapST = target.BaseMapST;
+                        passData.bumpMapST = target.BumpMapST;
+                        passData.specGlossMapST = target.SpecGlossMapST;
 
+                        builder.AllowGlobalStateModification(true);
                         builder.UseRendererList(rendererList);
                         builder.SetRenderAttachment(targetTextureHandle, 0);
+                        builder.UseTexture(baseMapHandle);
+                        builder.UseTexture(bumpMapHandle);
+                        builder.UseTexture(specGlossMapHandle);
 
                         builder.SetRenderFunc<RenderGraphPassData>(ExecuteRenderGraphPass);
                     }
@@ -208,6 +233,13 @@ namespace RealTimeLightBaker
                 {
                     cmd.ClearRenderTarget(RTClearFlags.Color, data.clearColor, 1f, 0);
                 }
+
+                cmd.SetGlobalTexture(BaseMapId, data.baseMap);
+                cmd.SetGlobalVector(BaseMapStId, data.baseMapST);
+                cmd.SetGlobalTexture(BumpMapId, data.bumpMap);
+                cmd.SetGlobalVector(BumpMapStId, data.bumpMapST);
+                cmd.SetGlobalTexture(SpecGlossMapId, data.specGlossMap);
+                cmd.SetGlobalVector(SpecGlossMapStId, data.specGlossMapST);
 
                 cmd.DrawRendererList(data.rendererList);
                 cmd.EndSample(k_RenderGraphSampleName);
@@ -281,7 +313,7 @@ namespace RealTimeLightBaker
 
         public readonly struct BakeTarget
         {
-            public BakeTarget(RenderTexture renderTexture, RTHandle renderTargetHandle, bool clear, Color clearColor, Rect viewport, uint renderingLayerMask)
+            public BakeTarget(RenderTexture renderTexture, RTHandle renderTargetHandle, bool clear, Color clearColor, Rect viewport, uint renderingLayerMask, RTHandle baseMap, Vector4 baseMapST, RTHandle bumpMap, Vector4 bumpMapST, RTHandle specGlossMap, Vector4 specGlossMapST)
             {
                 RenderTexture = renderTexture;
                 RenderTargetHandle = renderTargetHandle;
@@ -290,6 +322,12 @@ namespace RealTimeLightBaker
                 Viewport = viewport;
                 HasViewport = viewport.width > 0f && viewport.height > 0f;
                 RenderingLayerMask = renderingLayerMask;
+                BaseMap = baseMap;
+                BaseMapST = baseMapST;
+                BumpMap = bumpMap;
+                BumpMapST = bumpMapST;
+                SpecGlossMap = specGlossMap;
+                SpecGlossMapST = specGlossMapST;
             }
 
             public RenderTexture RenderTexture { get; }
@@ -299,6 +337,12 @@ namespace RealTimeLightBaker
             public bool HasViewport { get; }
             public uint RenderingLayerMask { get; }
             public RTHandle RenderTargetHandle { get; }
+            public RTHandle BaseMap { get; }
+            public Vector4 BaseMapST { get; }
+            public RTHandle BumpMap { get; }
+            public Vector4 BumpMapST { get; }
+            public RTHandle SpecGlossMap { get; }
+            public Vector4 SpecGlossMapST { get; }
         }
     }
 }

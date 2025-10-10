@@ -166,6 +166,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 27060126}
 --- !u!23 &27060126
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -269,6 +270,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 51486991}
 --- !u!23 &51486991
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -429,6 +431,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 246302104}
 --- !u!23 &246302104
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -588,6 +591,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 302512028}
 --- !u!1 &457225362
 GameObject:
   m_ObjectHideFlags: 0
@@ -992,7 +996,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 1.2924697e-26, y: 8388608, z: 2.3509887e-38, w: 4.5918e-41}
+  m_BoundingSphereOverride: {x: 5.626e-42, y: 2.524355e-29, z: 0, w: 4.3e-44}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -1323,6 +1327,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 547624372}
 --- !u!1 &550863049
 GameObject:
   m_ObjectHideFlags: 0
@@ -1599,6 +1604,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 665698948}
 --- !u!1 &723883385
 GameObject:
   m_ObjectHideFlags: 0
@@ -1798,7 +1804,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 1.5270977e+28, y: 6.976833e+22, z: 3.0350458e+32, w: 2.6893871e+20}
+  m_BoundingSphereOverride: {x: 2.7119297e-20, y: 1.4047225e-36, z: 2.098e-42, w: 6.561082e+28}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -2042,6 +2048,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 1132888622}
 --- !u!23 &1132888622
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2214,6 +2221,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 1236006432}
 --- !u!1 &1359555730
 GameObject:
   m_ObjectHideFlags: 0
@@ -2368,7 +2376,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 16.883945, y: -4.2613823e+14, z: 4.707425e-33, w: 2.1787228e+30}
+  m_BoundingSphereOverride: {x: 2.7132364e-20, y: 1.285802e-39, z: 1.1435e-41, w: 6.561082e+28}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -2495,6 +2503,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 1953623202}
 --- !u!23 &1953623202
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2654,6 +2663,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TexturePropSetter
   propertyName: _Lightmap
+  targetRenderer: {fileID: 2015995605}
 --- !u!1 &2103266471
 GameObject:
   m_ObjectHideFlags: 0

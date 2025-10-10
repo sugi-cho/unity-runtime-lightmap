@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
-using UnityEngine.Experimental.Rendering;
-using UnityEngine.SceneManagement;
 using UnityEngine.Rendering;
 using UnityEngine.Events;
 using UnityEngine.Rendering.Universal;
@@ -53,11 +51,15 @@ namespace RealTimeLightBaker
         private const int MaxBakeTargets = 31;
         private const uint BakeLayerBaseBit = 1;
 
+        private static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
+        private static readonly int BumpMapId = Shader.PropertyToID("_BumpMap");
+        private static readonly int SpecGlossMapId = Shader.PropertyToID("_SpecGlossMap");
         private static readonly List<RuntimeLightmapBaker> ActiveBakers = new();
 
         private readonly List<TargetEntry> _activeEntries = new();
         private readonly List<RealTimeLightBakerFeature.BakeTarget> _bakeTargets = new();
         private readonly List<LightState> _activeLights = new();
+        private readonly List<RTHandle> _transientTextureHandles = new();
 
         private bool _forceBake;
         private bool _isWaitingForPass;
@@ -519,6 +521,7 @@ namespace RealTimeLightBaker
             _activeEntries.Clear();
             _bakeTargets.Clear();
             _combinedBakeMask = 0u;
+            _transientTextureHandles.Clear();
 
             var sceneLights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             uint usedMask = CollectUsedRenderingLayers(sceneLights);
@@ -553,13 +556,39 @@ namespace RealTimeLightBaker
                 _combinedBakeMask |= layerBit;
                 _activeEntries.Add(entry);
 
+                var baseMapInfo = GetRendererTextureInfo(entry.renderer, BaseMapId);
+                var bumpMapInfo = GetRendererTextureInfo(entry.renderer, BumpMapId);
+                var specGlossMapInfo = GetRendererTextureInfo(entry.renderer, SpecGlossMapId);
+
+                var baseTexture = baseMapInfo.Texture ?? Texture2D.whiteTexture;
+                var bumpTexture = bumpMapInfo.Texture ?? (Texture2D.normalTexture != null ? Texture2D.normalTexture : Texture2D.grayTexture);
+                var specTexture = specGlossMapInfo.Texture ?? Texture2D.blackTexture;
+
+                var baseHandle = RTHandles.Alloc(baseTexture);
+                var bumpHandle = RTHandles.Alloc(bumpTexture);
+                var specHandle = RTHandles.Alloc(specTexture);
+
+                _transientTextureHandles.Add(baseHandle);
+                _transientTextureHandles.Add(bumpHandle);
+                _transientTextureHandles.Add(specHandle);
+
+                var baseST = new Vector4(baseMapInfo.Scale.x, baseMapInfo.Scale.y, baseMapInfo.Offset.x, baseMapInfo.Offset.y);
+                var bumpST = new Vector4(bumpMapInfo.Scale.x, bumpMapInfo.Scale.y, bumpMapInfo.Offset.x, bumpMapInfo.Offset.y);
+                var specST = new Vector4(specGlossMapInfo.Scale.x, specGlossMapInfo.Scale.y, specGlossMapInfo.Offset.x, specGlossMapInfo.Offset.y);
+
                 var bakeTarget = new RealTimeLightBakerFeature.BakeTarget(
                     entry.lightmap,
                     entry.rtHandle,
                     clear: true,
                     Color.clear,
                     Rect.zero,
-                    layerBit);
+                    layerBit,
+                    baseHandle,
+                    baseST,
+                    bumpHandle,
+                    bumpST,
+                    specHandle,
+                    specST);
 
                 _bakeTargets.Add(bakeTarget);
                 processedCount++;
@@ -567,6 +596,7 @@ namespace RealTimeLightBaker
 
             if (_activeEntries.Count == 0 || _combinedBakeMask == 0u)
             {
+                ReleaseTransientTextureHandles();
                 return;
             }
 
@@ -636,6 +666,7 @@ namespace RealTimeLightBaker
 
             RestoreRenderers();
             RestoreLights();
+            ReleaseTransientTextureHandles();
             _activeEntries.Clear();
             _activeLights.Clear();
             _isWaitingForPass = false;
@@ -673,6 +704,21 @@ namespace RealTimeLightBaker
                 }
             }
         }
+
+        private void ReleaseTransientTextureHandles()
+        {
+            if (_transientTextureHandles.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _transientTextureHandles.Count; i++)
+            {
+                _transientTextureHandles[i]?.Release();
+            }
+
+            _transientTextureHandles.Clear();
+        }
         internal static void OnBakePassFinished()
         {
             if (ActiveBakers.Count == 0)
@@ -709,6 +755,7 @@ namespace RealTimeLightBaker
 
             RestoreRenderers();
             RestoreLights();
+            ReleaseTransientTextureHandles();
 
             _activeEntries.Clear();
             _activeLights.Clear();
@@ -913,6 +960,63 @@ namespace RealTimeLightBaker
             entry.renderer.GetPropertyBlock(entry.mpb);
             entry.mpb.SetTexture(_propertyId, entry.lightmap);
             entry.renderer.SetPropertyBlock(entry.mpb);
+        }
+
+        private readonly struct MaterialTextureInfo
+        {
+            public MaterialTextureInfo(Texture texture, Vector2 scale, Vector2 offset)
+            {
+                Texture = texture;
+                Scale = scale;
+                Offset = offset;
+            }
+
+            public Texture Texture { get; }
+            public Vector2 Scale { get; }
+            public Vector2 Offset { get; }
+        }
+
+        private static MaterialTextureInfo GetRendererTextureInfo(Renderer renderer, int propertyId)
+        {
+            if (renderer == null)
+            {
+                return new MaterialTextureInfo(null, Vector2.one, Vector2.zero);
+            }
+
+            var sharedMaterials = renderer.sharedMaterials;
+            if (sharedMaterials != null && sharedMaterials.Length > 0)
+            {
+                for (int i = 0; i < sharedMaterials.Length; i++)
+                {
+                    var material = sharedMaterials[i];
+                    if (material == null || !material.HasTexture(propertyId))
+                    {
+                        continue;
+                    }
+
+                    var texture = material.GetTexture(propertyId);
+                    if (texture != null)
+                    {
+                        var scale = material.GetTextureScale(propertyId);
+                        var offset = material.GetTextureOffset(propertyId);
+                        return new MaterialTextureInfo(texture, scale, offset);
+                    }
+                }
+            }
+
+            var singleMaterial = renderer.sharedMaterial;
+            if (singleMaterial != null && singleMaterial.HasTexture(propertyId))
+            {
+                var texture = singleMaterial.GetTexture(propertyId);
+                if (texture != null)
+                {
+                    var scale = singleMaterial.GetTextureScale(propertyId);
+                    var offset = singleMaterial.GetTextureOffset(propertyId);
+                    return new MaterialTextureInfo(texture, scale, offset);
+                }
+            }
+
+            return new MaterialTextureInfo(null, Vector2.one, Vector2.zero);
         }
 
         private void CachePropertyId()
