@@ -25,6 +25,7 @@ This is the main `MonoBehaviour` component that you add to your scene. It orches
 -   **Resource Management:** For each target renderer, it creates and manages a dedicated `RenderTexture` which will become its lightmap.
 -   **Baking Isolation:** It uses a clever trick with `RenderingLayerMask` to isolate each target object. Before baking, it assigns a unique rendering layer to a target renderer and configures the scene's lights to only affect that layer. This ensures that only one object is drawn into its lightmap at a time.
 -   **Command Queueing:** It prepares all the necessary information for each target (the renderer, its lightmap texture, and its unique layer mask) and enqueues this data into the `RealTimeLightBakerFeature` for processing within the URP render loop.
+-   **Material Texture Passthrough:** Before each bake pass, it inspects the target renderer’s material for `_BaseMap`, `_BumpMap`, and `_SpecGlossMap`. When found, those textures (and their tiling/offset values) are pushed to the baking pipeline so the bake material renders with the same surface inputs the target uses at runtime.
 -   **Finalization:** After the feature has finished baking, this script handles applying the newly baked lightmap texture to the target's material properties.
 
 ### `RealTimeLightBakerFeature.cs` (The Worker)
@@ -48,6 +49,11 @@ This is the core shader responsible for the baking itself. It doesn't render the
 
 -   **Vertex Shader:** The key operation happens here. Instead of transforming the mesh vertices into camera clip space, it uses the object's lightmap UV coordinates (`TEXCOORD1` or uv2) to lay the mesh flat in clip space. The result is that the object's surface is drawn across the render texture, guided by its UV layout.
 -   **Fragment Shader:** For each pixel on this unwrapped surface, the fragment shader calculates the full URP lighting, including contributions from the main light, additional lights, and their shadows. The final computed light and shadow color is written to the render texture, which effectively becomes the object's lightmap.
+-   **Supplied Global Textures:** At bake time the pipeline sets the following global textures (and accompanying scale/offset vectors) so the shader can faithfully reproduce the target material:
+    - `_RTLB_BaseMap` / `_RTLB_BaseMap_ST` – main surface texture.
+    - `_RTLB_BumpMap` / `_RTLB_BumpMap_ST` – normal map (falls back to `Texture2D.normalTexture` when absent).
+    - `_RTLB_SpecGlossMap` / `_RTLB_SpecGlossMap_ST` – specular/smoothness map (falls back to black).
+    Custom bake shaders should declare matching `TEXTURE2D`/`SAMPLER` pairs and sample them using uv0 transformed by the provided ST values.
 
 ### `UVDilation.shader` (The Finisher)
 
@@ -78,3 +84,5 @@ This is a utility shader not directly used in the lightmap baking process itself
 half4 runtimeLightmap = SAMPLE_TEXTURE2D(_RuntimeLightmap, sampler_RuntimeLightmap, i.uv2);
 finalColor.rgb *= runtimeLightmap.rgb;
 ```
+
+> **Authoring custom bake shaders:** If you author an alternative to `UVRuntimeBakerURP.shader`, declare `TEXTURE2D`/`SAMPLER` pairs for `_RTLB_BaseMap`, `_RTLB_BumpMap`, `_RTLB_SpecGlossMap` and read them with UV0 transformed by the associated `_RTLB_*_ST` vectors. These globals mirror the textures assigned to each target renderer at bake time, guaranteeing the bake material receives the same surface inputs users see in-game.
