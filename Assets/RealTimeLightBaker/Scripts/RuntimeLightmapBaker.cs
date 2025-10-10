@@ -26,8 +26,8 @@ namespace RealTimeLightBaker
             [NonSerialized] public RTHandle rtHandle;
             [NonSerialized] public MaterialPropertyBlock mpb;
             [NonSerialized] public uint originalRenderingLayerMask;
-        [SerializeField] public UnityEvent<Texture> OnLightmapCreatedForTarget = new UnityEvent<Texture>();
-        [NonSerialized] public uint assignedBakeLayerBit;
+            [SerializeField] public UnityEvent<Texture> OnLightmapCreatedForTarget = new UnityEvent<Texture>();
+            [NonSerialized] public uint assignedBakeLayerBit;
         }
 
         private sealed class LightState
@@ -521,7 +521,7 @@ namespace RealTimeLightBaker
             _activeEntries.Clear();
             _bakeTargets.Clear();
             _combinedBakeMask = 0u;
-            _transientTextureHandles.Clear();
+            ReleaseTransientTextureHandles();
 
             var sceneLights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             uint usedMask = CollectUsedRenderingLayers(sceneLights);
@@ -560,21 +560,10 @@ namespace RealTimeLightBaker
                 var bumpMapInfo = GetRendererTextureInfo(entry.renderer, BumpMapId);
                 var specGlossMapInfo = GetRendererTextureInfo(entry.renderer, SpecGlossMapId);
 
-                var baseTexture = baseMapInfo.Texture ?? Texture2D.whiteTexture;
-                var bumpTexture = bumpMapInfo.Texture ?? (Texture2D.normalTexture != null ? Texture2D.normalTexture : Texture2D.grayTexture);
-                var specTexture = specGlossMapInfo.Texture ?? Texture2D.blackTexture;
-
-                var baseHandle = RTHandles.Alloc(baseTexture);
-                var bumpHandle = RTHandles.Alloc(bumpTexture);
-                var specHandle = RTHandles.Alloc(specTexture);
-
-                _transientTextureHandles.Add(baseHandle);
-                _transientTextureHandles.Add(bumpHandle);
-                _transientTextureHandles.Add(specHandle);
-
-                var baseST = new Vector4(baseMapInfo.Scale.x, baseMapInfo.Scale.y, baseMapInfo.Offset.x, baseMapInfo.Offset.y);
-                var bumpST = new Vector4(bumpMapInfo.Scale.x, bumpMapInfo.Scale.y, bumpMapInfo.Offset.x, bumpMapInfo.Offset.y);
-                var specST = new Vector4(specGlossMapInfo.Scale.x, specGlossMapInfo.Scale.y, specGlossMapInfo.Offset.x, specGlossMapInfo.Offset.y);
+                var baseBinding = CreateTextureBinding(baseMapInfo, Texture2D.whiteTexture);
+                var bumpFallback = Texture2D.normalTexture != null ? Texture2D.normalTexture : Texture2D.grayTexture;
+                var bumpBinding = CreateTextureBinding(bumpMapInfo, bumpFallback);
+                var specBinding = CreateTextureBinding(specGlossMapInfo, Texture2D.blackTexture);
 
                 var bakeTarget = new RealTimeLightBakerFeature.BakeTarget(
                     entry.lightmap,
@@ -583,12 +572,12 @@ namespace RealTimeLightBaker
                     Color.clear,
                     Rect.zero,
                     layerBit,
-                    baseHandle,
-                    baseST,
-                    bumpHandle,
-                    bumpST,
-                    specHandle,
-                    specST);
+                    baseBinding.Handle,
+                    baseBinding.St,
+                    bumpBinding.Handle,
+                    bumpBinding.St,
+                    specBinding.Handle,
+                    specBinding.St);
 
                 _bakeTargets.Add(bakeTarget);
                 processedCount++;
@@ -962,6 +951,18 @@ namespace RealTimeLightBaker
             entry.renderer.SetPropertyBlock(entry.mpb);
         }
 
+        private readonly struct TextureBinding
+        {
+            public TextureBinding(RTHandle handle, Vector4 st)
+            {
+                Handle = handle;
+                St = st;
+            }
+
+            public RTHandle Handle { get; }
+            public Vector4 St { get; }
+        }
+
         private readonly struct MaterialTextureInfo
         {
             public MaterialTextureInfo(Texture texture, Vector2 scale, Vector2 offset)
@@ -974,6 +975,24 @@ namespace RealTimeLightBaker
             public Texture Texture { get; }
             public Vector2 Scale { get; }
             public Vector2 Offset { get; }
+        }
+
+        private TextureBinding CreateTextureBinding(MaterialTextureInfo info, Texture fallback)
+        {
+            var texture = info.Texture != null ? info.Texture : fallback;
+            var handle = RTHandles.Alloc(texture);
+            _transientTextureHandles.Add(handle);
+
+            var scale = info.Scale;
+            if (Mathf.Approximately(scale.x, 0f) && Mathf.Approximately(scale.y, 0f))
+            {
+                scale = Vector2.one;
+            }
+
+            var offset = info.Offset;
+            var st = new Vector4(scale.x, scale.y, offset.x, offset.y);
+
+            return new TextureBinding(handle, st);
         }
 
         private static MaterialTextureInfo GetRendererTextureInfo(Renderer renderer, int propertyId)
