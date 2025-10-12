@@ -60,8 +60,10 @@ namespace RealTimeLightBaker
         private static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
         private static readonly int BumpMapId = Shader.PropertyToID("_BumpMap");
         private static readonly int SpecGlossMapId = Shader.PropertyToID("_SpecGlossMap");
+        private static readonly int EmissionMapId = Shader.PropertyToID("_EmissionMap");
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int SpecColorId = Shader.PropertyToID("_SpecColor");
+        private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
         private static readonly int SmoothnessId = Shader.PropertyToID("_Smoothness");
         private static readonly int BakeCameraPosId = Shader.PropertyToID("_RTLB_BakeCameraPos");
         private static readonly List<RuntimeLightmapBaker> ActiveBakers = new();
@@ -603,15 +605,19 @@ namespace RealTimeLightBaker
                 var baseMapInfo = GetRendererTextureInfo(entry.renderer, BaseMapId);
                 var bumpMapInfo = GetRendererTextureInfo(entry.renderer, BumpMapId);
                 var specGlossMapInfo = GetRendererTextureInfo(entry.renderer, SpecGlossMapId);
+                var emissionMapInfo = GetRendererTextureInfo(entry.renderer, EmissionMapId);
 
                 var baseBinding = CreateTextureBinding(baseMapInfo, Texture2D.whiteTexture);
                 var bumpFallback = Texture2D.normalTexture != null ? Texture2D.normalTexture : Texture2D.grayTexture;
                 var bumpBinding = CreateTextureBinding(bumpMapInfo, bumpFallback);
                 bool hasSpecGlossMap = specGlossMapInfo.Texture != null;
                 var specBinding = CreateTextureBinding(specGlossMapInfo, Texture2D.whiteTexture);
+                bool hasEmissionMap = emissionMapInfo.Texture != null;
+                var emissionBinding = CreateTextureBinding(emissionMapInfo, Texture2D.whiteTexture);
 
                 var baseColor = GetRendererColor(entry.renderer, BaseColorId, Color.white);
                 var specColor = GetRendererColor(entry.renderer, SpecColorId, new Color(0.2f, 0.2f, 0.2f, 1f));
+                var emissionColor = GetRendererColor(entry.renderer, EmissionColorId, Color.black);
                 float smoothness = Mathf.Clamp01(GetRendererFloat(entry.renderer, SmoothnessId, 0.5f));
 
                 var bakeTarget = new RealTimeLightBakerFeature.BakeTarget(
@@ -627,10 +633,14 @@ namespace RealTimeLightBaker
                     bumpBinding.St,
                     specBinding.Handle,
                     specBinding.St,
+                    emissionBinding.Handle,
+                    emissionBinding.St,
                     baseColor,
                     specColor,
+                    emissionColor,
                     smoothness,
-                    hasSpecGlossMap ? 1f : 0f);
+                    hasSpecGlossMap ? 1f : 0f,
+                    hasEmissionMap ? 1f : 0f);
 
                 _bakeTargets.Add(bakeTarget);
                 entry.lastBakedFrame = Time.frameCount;

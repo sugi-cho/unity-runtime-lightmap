@@ -37,6 +37,7 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             TEXTURE2D(_RTLB_BaseMap);   SAMPLER(sampler_RTLB_BaseMap);
             TEXTURE2D(_RTLB_BumpMap);   SAMPLER(sampler_RTLB_BumpMap);
             TEXTURE2D(_RTLB_SpecGlossMap); SAMPLER(sampler_RTLB_SpecGlossMap);
+            TEXTURE2D(_RTLB_EmissionMap); SAMPLER(sampler_RTLB_EmissionMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float _Cutoff;
@@ -52,6 +53,9 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             float4 _RTLB_BaseColor;
             float4 _RTLB_SpecColor;
             float _RTLB_Smoothness;
+            float4 _RTLB_EmissionMap_ST;
+            float4 _RTLB_EmissionColor;
+            float _RTLB_HasEmissionMap;
 
             struct Attributes
             {
@@ -177,7 +181,15 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             #endif
 
                 float3 diffuse = lerp(diffuseAccum, diffuseAccum * albedoColor, albedoWeight);
-                float3 outColor = diffuse + specularAccum;
+                float3 emission = _RTLB_EmissionColor.rgb;
+                if (_RTLB_HasEmissionMap > 0.5f)
+                {
+                    float2 uvEmission = input.uv0 * _RTLB_EmissionMap_ST.xy + _RTLB_EmissionMap_ST.zw;
+                    float3 emissionSample = SAMPLE_TEXTURE2D(_RTLB_EmissionMap, sampler_RTLB_EmissionMap, uvEmission).rgb;
+                    emission *= emissionSample;
+                }
+
+                float3 outColor = diffuse + specularAccum + emission;
                 return half4(outColor, 1.0f);
             }
             ENDHLSL

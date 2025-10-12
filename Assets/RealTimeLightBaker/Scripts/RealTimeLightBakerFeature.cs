@@ -35,6 +35,7 @@ namespace RealTimeLightBaker
             private static readonly int BaseMapId = Shader.PropertyToID("_RTLB_BaseMap");
             private static readonly int BumpMapId = Shader.PropertyToID("_RTLB_BumpMap");
             private static readonly int SpecGlossMapId = Shader.PropertyToID("_RTLB_SpecGlossMap");
+            private static readonly int EmissionMapId = Shader.PropertyToID("_RTLB_EmissionMap");
             private static readonly int BaseMapStId = Shader.PropertyToID("_RTLB_BaseMap_ST");
             private static readonly int BumpMapStId = Shader.PropertyToID("_RTLB_BumpMap_ST");
             private static readonly int SpecGlossMapStId = Shader.PropertyToID("_RTLB_SpecGlossMap_ST");
@@ -42,6 +43,9 @@ namespace RealTimeLightBaker
             private static readonly int SpecColorId = Shader.PropertyToID("_RTLB_SpecColor");
             private static readonly int SmoothnessId = Shader.PropertyToID("_RTLB_Smoothness");
             private static readonly int HasSpecGlossMapId = Shader.PropertyToID("_RTLB_HasSpecGlossMap");
+            private static readonly int EmissionMapStId = Shader.PropertyToID("_RTLB_EmissionMap_ST");
+            private static readonly int EmissionColorId = Shader.PropertyToID("_RTLB_EmissionColor");
+            private static readonly int HasEmissionMapId = Shader.PropertyToID("_RTLB_HasEmissionMap");
 
             public BakePass(Settings settings)
             {
@@ -74,13 +78,17 @@ namespace RealTimeLightBaker
                 public TextureHandle baseMap;
                 public TextureHandle bumpMap;
                 public TextureHandle specGlossMap;
+                public TextureHandle emissionMap;
                 public Vector4 baseMapST;
                 public Vector4 bumpMapST;
                 public Vector4 specGlossMapST;
+                public Vector4 emissionMapST;
                 public Color baseColor;
                 public Color specColor;
+                public Color emissionColor;
                 public float smoothness;
                 public float hasSpecGlossMap;
+                public float hasEmissionMap;
             }
 
             private sealed class DilationPassData
@@ -149,6 +157,7 @@ namespace RealTimeLightBaker
                     var baseMapHandle = renderGraph.ImportTexture(target.BaseMap);
                     var bumpMapHandle = renderGraph.ImportTexture(target.BumpMap);
                     var specGlossMapHandle = renderGraph.ImportTexture(target.SpecGlossMap);
+                    var emissionMapHandle = renderGraph.ImportTexture(target.EmissionMap);
 
                     using (var builder = renderGraph.AddRasterRenderPass<RenderGraphPassData>($"Runtime Lightmap Bake (Target {targetIndex})", out var passData, _profilingSampler))
                     {
@@ -160,15 +169,19 @@ namespace RealTimeLightBaker
                         passData.viewport = viewport;
                         passData.size = size;
                         passData.baseMap = baseMapHandle;
-                        passData.bumpMap = bumpMapHandle;
-                        passData.specGlossMap = specGlossMapHandle;
-                        passData.baseMapST = target.BaseMapST;
-                        passData.bumpMapST = target.BumpMapST;
-                        passData.specGlossMapST = target.SpecGlossMapST;
-                        passData.baseColor = target.BaseColor;
-                        passData.specColor = target.SpecColor;
-                        passData.smoothness = target.Smoothness;
-                        passData.hasSpecGlossMap = target.HasSpecGlossMap;
+                    passData.bumpMap = bumpMapHandle;
+                    passData.specGlossMap = specGlossMapHandle;
+                    passData.emissionMap = emissionMapHandle;
+                    passData.baseMapST = target.BaseMapST;
+                    passData.bumpMapST = target.BumpMapST;
+                    passData.specGlossMapST = target.SpecGlossMapST;
+                    passData.emissionMapST = target.EmissionMapST;
+                    passData.baseColor = target.BaseColor;
+                    passData.specColor = target.SpecColor;
+                    passData.emissionColor = target.EmissionColor;
+                    passData.smoothness = target.Smoothness;
+                    passData.hasSpecGlossMap = target.HasSpecGlossMap;
+                    passData.hasEmissionMap = target.HasEmissionMap;
 
                         builder.AllowGlobalStateModification(true);
                         builder.UseRendererList(rendererList);
@@ -176,6 +189,7 @@ namespace RealTimeLightBaker
                         builder.UseTexture(baseMapHandle);
                         builder.UseTexture(bumpMapHandle);
                         builder.UseTexture(specGlossMapHandle);
+                        builder.UseTexture(emissionMapHandle);
 
                         builder.SetRenderFunc<RenderGraphPassData>(ExecuteRenderGraphPass);
                     }
@@ -252,10 +266,14 @@ namespace RealTimeLightBaker
                 cmd.SetGlobalVector(BumpMapStId, data.bumpMapST);
                 cmd.SetGlobalTexture(SpecGlossMapId, data.specGlossMap);
                 cmd.SetGlobalVector(SpecGlossMapStId, data.specGlossMapST);
+                cmd.SetGlobalTexture(EmissionMapId, data.emissionMap);
+                cmd.SetGlobalVector(EmissionMapStId, data.emissionMapST);
                 cmd.SetGlobalVector(BaseColorId, data.baseColor);
                 cmd.SetGlobalVector(SpecColorId, data.specColor);
+                cmd.SetGlobalVector(EmissionColorId, data.emissionColor);
                 cmd.SetGlobalFloat(SmoothnessId, data.smoothness);
                 cmd.SetGlobalFloat(HasSpecGlossMapId, data.hasSpecGlossMap);
+                cmd.SetGlobalFloat(HasEmissionMapId, data.hasEmissionMap);
 
                 cmd.DrawRendererList(data.rendererList);
                 cmd.EndSample(k_RenderGraphSampleName);
@@ -329,7 +347,7 @@ namespace RealTimeLightBaker
 
         public readonly struct BakeTarget
         {
-            public BakeTarget(RenderTexture renderTexture, RTHandle renderTargetHandle, bool clear, Color clearColor, Rect viewport, uint renderingLayerMask, RTHandle baseMap, Vector4 baseMapST, RTHandle bumpMap, Vector4 bumpMapST, RTHandle specGlossMap, Vector4 specGlossMapST, Color baseColor, Color specColor, float smoothness, float hasSpecGlossMap)
+            public BakeTarget(RenderTexture renderTexture, RTHandle renderTargetHandle, bool clear, Color clearColor, Rect viewport, uint renderingLayerMask, RTHandle baseMap, Vector4 baseMapST, RTHandle bumpMap, Vector4 bumpMapST, RTHandle specGlossMap, Vector4 specGlossMapST, RTHandle emissionMap, Vector4 emissionMapST, Color baseColor, Color specColor, Color emissionColor, float smoothness, float hasSpecGlossMap, float hasEmissionMap)
             {
                 RenderTexture = renderTexture;
                 RenderTargetHandle = renderTargetHandle;
@@ -344,10 +362,14 @@ namespace RealTimeLightBaker
                 BumpMapST = bumpMapST;
                 SpecGlossMap = specGlossMap;
                 SpecGlossMapST = specGlossMapST;
+                EmissionMap = emissionMap;
+                EmissionMapST = emissionMapST;
                 BaseColor = baseColor;
                 SpecColor = specColor;
+                EmissionColor = emissionColor;
                 Smoothness = smoothness;
                 HasSpecGlossMap = hasSpecGlossMap;
+                HasEmissionMap = hasEmissionMap;
             }
 
             public RenderTexture RenderTexture { get; }
@@ -363,10 +385,14 @@ namespace RealTimeLightBaker
             public Vector4 BumpMapST { get; }
             public RTHandle SpecGlossMap { get; }
             public Vector4 SpecGlossMapST { get; }
+            public RTHandle EmissionMap { get; }
+            public Vector4 EmissionMapST { get; }
             public Color BaseColor { get; }
             public Color SpecColor { get; }
+            public Color EmissionColor { get; }
             public float Smoothness { get; }
             public float HasSpecGlossMap { get; }
+            public float HasEmissionMap { get; }
         }
     }
 }
