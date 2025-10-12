@@ -5,6 +5,9 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Events;
 using UnityEngine.Rendering.Universal;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace RealTimeLightBaker
 {
@@ -21,6 +24,7 @@ namespace RealTimeLightBaker
         {
             public Renderer renderer;
             [Range(128, 4096)] public int lightmapSize = 1024;
+            public Camera bakeCamera;
 
             [NonSerialized] public RenderTexture lightmap;
             [NonSerialized] public RTHandle rtHandle;
@@ -28,6 +32,7 @@ namespace RealTimeLightBaker
             [NonSerialized] public uint originalRenderingLayerMask;
             [SerializeField] public UnityEvent<Texture> OnLightmapCreatedForTarget = new UnityEvent<Texture>();
             [NonSerialized] public uint assignedBakeLayerBit;
+            [NonSerialized] public int lastBakedFrame = -1;
         }
 
         private sealed class LightState
@@ -47,6 +52,7 @@ namespace RealTimeLightBaker
         [SerializeField] private bool autoApplyToTargets = true;
         [SerializeField] private string runtimeLightmapProperty = "_RuntimeLightmap";
         [SerializeField, Range(128, 4096)] private int defaultLightmapSize = 1024;
+        [SerializeField] private Camera defaultBakeCamera;
 
         private const int MaxBakeTargets = 31;
         private const uint BakeLayerBaseBit = 1;
@@ -54,6 +60,7 @@ namespace RealTimeLightBaker
         private static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
         private static readonly int BumpMapId = Shader.PropertyToID("_BumpMap");
         private static readonly int SpecGlossMapId = Shader.PropertyToID("_SpecGlossMap");
+        private static readonly int BakeCameraPosId = Shader.PropertyToID("_RTLB_BakeCameraPos");
         private static readonly List<RuntimeLightmapBaker> ActiveBakers = new();
 
         private readonly List<TargetEntry> _activeEntries = new();
@@ -65,6 +72,7 @@ namespace RealTimeLightBaker
         private bool _isWaitingForPass;
         private uint _combinedBakeMask;
         private bool _loggedPipelineSettings;
+        private bool _missingDefaultBakeCameraLogged;
         private int _propertyId;
 
         private void Awake()
@@ -77,8 +85,10 @@ namespace RealTimeLightBaker
             CachePropertyId();
             EnsureResources();
             AssignRenderingLayerBitsToTargets();
+            AssignDefaultBakeCameraIfNeeded();
             RenderPipelineManager.beginCameraRendering += HandleBeginCameraRendering;
             _forceBake = true;
+            _missingDefaultBakeCameraLogged = false;
         }
 
         private void OnDisable()
@@ -109,7 +119,9 @@ namespace RealTimeLightBaker
 
             AssignRenderingLayerBitsToTargets();
             EnsureResources();
+            AssignDefaultBakeCameraIfNeeded();
             _forceBake = true;
+            _missingDefaultBakeCameraLogged = false;
         }
 
         private void AssignRenderingLayerBitsToTargets()
@@ -294,7 +306,7 @@ namespace RealTimeLightBaker
 
         private void HandleBeginCameraRendering(ScriptableRenderContext context, Camera camera)
         {
-            if (!ShouldBakeThisCamera(camera) || !ShouldBakeNow() || _isWaitingForPass)
+            if (!ShouldBakeThisCamera(camera) || !ShouldBakeNow(camera) || _isWaitingForPass)
             {
                 return;
             }
@@ -304,7 +316,7 @@ namespace RealTimeLightBaker
                 return;
             }
 
-            PrepareAndEnqueueBake();
+            PrepareAndEnqueueBake(camera);
         }
 
         private void LogPipelineSettingsOnce()
@@ -510,7 +522,7 @@ namespace RealTimeLightBaker
 
             return null;
         }
-        private void PrepareAndEnqueueBake()
+        private void PrepareAndEnqueueBake(Camera activeCamera)
         {
             var feature = RealTimeLightBakerFeature.Instance;
             var settings = feature?.settings;
@@ -518,6 +530,17 @@ namespace RealTimeLightBaker
             {
                 return;
             }
+
+            if (targets == null || targets.Count == 0)
+            {
+                return;
+            }
+
+            if (activeCamera != null)
+            {
+                Shader.SetGlobalVector(BakeCameraPosId, activeCamera.transform.position);
+            }
+
             _activeEntries.Clear();
             _bakeTargets.Clear();
             _combinedBakeMask = 0u;
@@ -527,14 +550,32 @@ namespace RealTimeLightBaker
             uint usedMask = CollectUsedRenderingLayers(sceneLights);
 
             int processedCount = 0;
-            foreach (var entry in targets)
+            for (int i = 0; i < targets.Count; i++)
             {
+                var entry = targets[i];
                 if (entry == null || entry.renderer == null || entry.lightmap == null)
                 {
                     continue;
                 }
 
                 if (entry.rtHandle == null || entry.rtHandle.rt == null)
+                {
+                    continue;
+                }
+
+                if (entry.lastBakedFrame == Time.frameCount)
+                {
+                    continue;
+                }
+
+                var effectiveCamera = GetEffectiveBakeCamera(entry);
+                if (effectiveCamera == null)
+                {
+                    LogMissingDefaultCameraOnce();
+                    continue;
+                }
+
+                if (effectiveCamera != activeCamera)
                 {
                     continue;
                 }
@@ -580,6 +621,7 @@ namespace RealTimeLightBaker
                     specBinding.St);
 
                 _bakeTargets.Add(bakeTarget);
+                entry.lastBakedFrame = Time.frameCount;
                 processedCount++;
             }
 
@@ -600,6 +642,65 @@ namespace RealTimeLightBaker
             }
 
             _isWaitingForPass = true;
+        }
+
+        private Camera GetEffectiveBakeCamera(TargetEntry entry)
+        {
+            if (entry == null)
+            {
+                return null;
+            }
+
+            if (entry.bakeCamera != null)
+            {
+                return entry.bakeCamera;
+            }
+
+            return defaultBakeCamera;
+        }
+
+        private void LogMissingDefaultCameraOnce()
+        {
+            if (_missingDefaultBakeCameraLogged)
+            {
+                return;
+            }
+
+            Debug.LogWarning("RuntimeLightmapBaker: Default bake camera is not assigned. Targets without a specific bake camera will be skipped.");
+            _missingDefaultBakeCameraLogged = true;
+        }
+
+        private void AssignDefaultBakeCameraIfNeeded()
+        {
+            if (defaultBakeCamera != null)
+            {
+                return;
+            }
+
+            var taggedCamera = Camera.main;
+            if (taggedCamera != null)
+            {
+                defaultBakeCamera = taggedCamera;
+                return;
+            }
+
+            var cameras = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID);
+            if (cameras == null || cameras.Length == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < cameras.Length; i++)
+            {
+                var camera = cameras[i];
+                if (camera == null)
+                {
+                    continue;
+                }
+
+                defaultBakeCamera = camera;
+                return;
+            }
         }
 
 
@@ -760,10 +861,15 @@ namespace RealTimeLightBaker
                 return false;
             }
 
-            return camera.cameraType == CameraType.Game || camera.cameraType == CameraType.SceneView;
+            if (camera.cameraType == CameraType.SceneView)
+            {
+                return false;
+            }
+
+            return camera.cameraType == CameraType.Game || camera.cameraType == CameraType.VR || camera.cameraType == CameraType.Preview;
         }
 
-        private bool ShouldBakeNow()
+        private bool ShouldBakeNow(Camera activeCamera)
         {
             var settings = RealTimeLightBakerFeature.Instance?.settings;
             if (settings == null || settings.bakeMaterial == null)
@@ -772,16 +878,34 @@ namespace RealTimeLightBaker
             }
 
             bool hasValidTarget = false;
-            foreach (var entry in targets)
+            bool hasCameraMatch = false;
+
+            if (targets != null)
             {
-                if (entry != null && entry.renderer != null)
+                for (int i = 0; i < targets.Count; i++)
                 {
+                    var entry = targets[i];
+                    if (entry == null || entry.renderer == null)
+                    {
+                        continue;
+                    }
+
                     hasValidTarget = true;
-                    break;
+                    var effectiveCamera = GetEffectiveBakeCamera(entry);
+                    if (effectiveCamera == null)
+                    {
+                        continue;
+                    }
+
+                    if (effectiveCamera == activeCamera)
+                    {
+                        hasCameraMatch = true;
+                        break;
+                    }
                 }
             }
 
-            if (!hasValidTarget)
+            if (!hasValidTarget || !hasCameraMatch)
             {
                 return false;
             }

@@ -58,6 +58,7 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             float4 _RTLB_BaseMap_ST;
             float4 _RTLB_BumpMap_ST;
             float4 _RTLB_SpecGlossMap_ST;
+            float3 _RTLB_BakeCameraPos;
 
             struct Attributes
             {
@@ -123,9 +124,27 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
 
                 Light mainLight = GetMainLight(input.shadowCoord);
                 float3 lighting = float3(0.0, 0.0, 0.0);
+                float3 specularAccum = float3(0.0, 0.0, 0.0);
+
+                float3 viewDir = SafeNormalize(GetWorldSpaceViewDir(input.positionWS));
+                float3 viewOffset = _RTLB_BakeCameraPos - input.positionWS;
+                float viewLenSq = dot(viewOffset, viewOffset);
+                if (viewLenSq > 1e-8f)
+                {
+                    viewDir = viewOffset * rsqrt(viewLenSq);
+                }
+
+                float specularPower = max(specGlossSample.a * 128.0f, 1.0f);
+                float3 specularColor = specGlossSample.rgb;
 
                 float ndotlMain = saturate(dot(N, mainLight.direction));
                 lighting += ndotlMain * mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
+                if (ndotlMain > 0.0f)
+                {
+                    float3 halfMain = SafeNormalize(mainLight.direction + viewDir);
+                    float nh = saturate(dot(N, halfMain));
+                    specularAccum += pow(nh, specularPower) * specularColor * mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
+                }
 
             #ifdef _ADDITIONAL_LIGHTS
                 uint lightsCount = GetAdditionalLightsCount();
@@ -141,15 +160,19 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
 
                     float ndotl = saturate(dot(N, light.direction));
                     lighting += ndotl * light.color * light.distanceAttenuation * light.shadowAttenuation;
+                    if (ndotl > 0.0f)
+                    {
+                        float3 halfVec = SafeNormalize(light.direction + viewDir);
+                        float nh = saturate(dot(N, halfVec));
+                        specularAccum += pow(nh, specularPower) * specularColor * light.color * light.distanceAttenuation * light.shadowAttenuation;
+                    }
                 LIGHT_LOOP_END
             #endif
 
-                // TODO: Use specGlossSample for specular lighting calculation if needed.
-                // float3 specular = specGlossSample.rgb;
-                // float smoothness = specGlossSample.a;
-
-                float3 baked = lighting;
-                float3 outColor = lerp(baked, baked * albedoSample.rgb, saturate(_MultiplyAlbedo));
+                float3 albedoColor = albedoSample.rgb;
+                float albedoWeight = saturate(_MultiplyAlbedo);
+                float3 diffuse = lerp(lighting, albedoColor * lighting, albedoWeight);
+                float3 outColor = diffuse + specularAccum;
                 return half4(outColor, 1.0f);
             }
             ENDHLSL
