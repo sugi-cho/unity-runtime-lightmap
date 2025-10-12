@@ -38,6 +38,10 @@ namespace RealTimeLightBaker
             private static readonly int BaseMapStId = Shader.PropertyToID("_RTLB_BaseMap_ST");
             private static readonly int BumpMapStId = Shader.PropertyToID("_RTLB_BumpMap_ST");
             private static readonly int SpecGlossMapStId = Shader.PropertyToID("_RTLB_SpecGlossMap_ST");
+            private static readonly int BaseColorId = Shader.PropertyToID("_RTLB_BaseColor");
+            private static readonly int SpecColorId = Shader.PropertyToID("_RTLB_SpecColor");
+            private static readonly int SmoothnessId = Shader.PropertyToID("_RTLB_Smoothness");
+            private static readonly int HasSpecGlossMapId = Shader.PropertyToID("_RTLB_HasSpecGlossMap");
 
             public BakePass(Settings settings)
             {
@@ -73,6 +77,10 @@ namespace RealTimeLightBaker
                 public Vector4 baseMapST;
                 public Vector4 bumpMapST;
                 public Vector4 specGlossMapST;
+                public Color baseColor;
+                public Color specColor;
+                public float smoothness;
+                public float hasSpecGlossMap;
             }
 
             private sealed class DilationPassData
@@ -157,6 +165,10 @@ namespace RealTimeLightBaker
                         passData.baseMapST = target.BaseMapST;
                         passData.bumpMapST = target.BumpMapST;
                         passData.specGlossMapST = target.SpecGlossMapST;
+                        passData.baseColor = target.BaseColor;
+                        passData.specColor = target.SpecColor;
+                        passData.smoothness = target.Smoothness;
+                        passData.hasSpecGlossMap = target.HasSpecGlossMap;
 
                         builder.AllowGlobalStateModification(true);
                         builder.UseRendererList(rendererList);
@@ -240,6 +252,10 @@ namespace RealTimeLightBaker
                 cmd.SetGlobalVector(BumpMapStId, data.bumpMapST);
                 cmd.SetGlobalTexture(SpecGlossMapId, data.specGlossMap);
                 cmd.SetGlobalVector(SpecGlossMapStId, data.specGlossMapST);
+                cmd.SetGlobalVector(BaseColorId, data.baseColor);
+                cmd.SetGlobalVector(SpecColorId, data.specColor);
+                cmd.SetGlobalFloat(SmoothnessId, data.smoothness);
+                cmd.SetGlobalFloat(HasSpecGlossMapId, data.hasSpecGlossMap);
 
                 cmd.DrawRendererList(data.rendererList);
                 cmd.EndSample(k_RenderGraphSampleName);
@@ -313,7 +329,7 @@ namespace RealTimeLightBaker
 
         public readonly struct BakeTarget
         {
-            public BakeTarget(RenderTexture renderTexture, RTHandle renderTargetHandle, bool clear, Color clearColor, Rect viewport, uint renderingLayerMask, RTHandle baseMap, Vector4 baseMapST, RTHandle bumpMap, Vector4 bumpMapST, RTHandle specGlossMap, Vector4 specGlossMapST)
+            public BakeTarget(RenderTexture renderTexture, RTHandle renderTargetHandle, bool clear, Color clearColor, Rect viewport, uint renderingLayerMask, RTHandle baseMap, Vector4 baseMapST, RTHandle bumpMap, Vector4 bumpMapST, RTHandle specGlossMap, Vector4 specGlossMapST, Color baseColor, Color specColor, float smoothness, float hasSpecGlossMap)
             {
                 RenderTexture = renderTexture;
                 RenderTargetHandle = renderTargetHandle;
@@ -328,6 +344,10 @@ namespace RealTimeLightBaker
                 BumpMapST = bumpMapST;
                 SpecGlossMap = specGlossMap;
                 SpecGlossMapST = specGlossMapST;
+                BaseColor = baseColor;
+                SpecColor = specColor;
+                Smoothness = smoothness;
+                HasSpecGlossMap = hasSpecGlossMap;
             }
 
             public RenderTexture RenderTexture { get; }
@@ -343,6 +363,10 @@ namespace RealTimeLightBaker
             public Vector4 BumpMapST { get; }
             public RTHandle SpecGlossMap { get; }
             public Vector4 SpecGlossMapST { get; }
+            public Color BaseColor { get; }
+            public Color SpecColor { get; }
+            public float Smoothness { get; }
+            public float HasSpecGlossMap { get; }
         }
     }
 }

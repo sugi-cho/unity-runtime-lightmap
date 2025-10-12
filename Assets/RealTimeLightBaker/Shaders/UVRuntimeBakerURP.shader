@@ -2,10 +2,6 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
 {
     Properties
     {
-        _BaseMap ("Base Map (albedo)", 2D) = "white" {}
-        _BumpMap ("Normal Map", 2D) = "bump" {}
-        _SpecGlossMap ("Specular", 2D) = "white" {}
-        _BaseColor ("Base Color", Color) = (1,1,1,1)
         _Cutoff ("Alpha Cutoff", Range(0,1)) = 0
         _MultiplyAlbedo ("Multiply Albedo", Range(0,1)) = 1
         _FlipY ("Flip UV.y for RT", Float) = 1
@@ -38,18 +34,11 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            TEXTURE2D(_BaseMap);        SAMPLER(sampler_BaseMap);
-            TEXTURE2D(_BumpMap);        SAMPLER(sampler_BumpMap);
-            TEXTURE2D(_SpecGlossMap);   SAMPLER(sampler_SpecGlossMap);
             TEXTURE2D(_RTLB_BaseMap);   SAMPLER(sampler_RTLB_BaseMap);
             TEXTURE2D(_RTLB_BumpMap);   SAMPLER(sampler_RTLB_BumpMap);
             TEXTURE2D(_RTLB_SpecGlossMap); SAMPLER(sampler_RTLB_SpecGlossMap);
 
             CBUFFER_START(UnityPerMaterial)
-                float4 _BaseMap_ST;
-                float4 _BumpMap_ST;
-                float4 _SpecGlossMap_ST;
-                float4 _BaseColor;
                 float _Cutoff;
                 float _MultiplyAlbedo;
                 float _FlipY;
@@ -59,6 +48,10 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
             float4 _RTLB_BumpMap_ST;
             float4 _RTLB_SpecGlossMap_ST;
             float3 _RTLB_BakeCameraPos;
+            float _RTLB_HasSpecGlossMap;
+            float4 _RTLB_BaseColor;
+            float4 _RTLB_SpecColor;
+            float _RTLB_Smoothness;
 
             struct Attributes
             {
@@ -111,11 +104,24 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 UNITY_SETUP_INSTANCE_ID(input);
 
                 float2 uvBase = input.uv0 * _RTLB_BaseMap_ST.xy + _RTLB_BaseMap_ST.zw;
-                float4 albedoSample = SAMPLE_TEXTURE2D(_RTLB_BaseMap, sampler_RTLB_BaseMap, uvBase) * _BaseColor;
-                clip(albedoSample.a - _Cutoff);
+                float4 baseSample = SAMPLE_TEXTURE2D(_RTLB_BaseMap, sampler_RTLB_BaseMap, uvBase);
+                float alpha = baseSample.a * _RTLB_BaseColor.a;
+                clip(alpha - _Cutoff);
+
+                float3 albedoColor = baseSample.rgb * _RTLB_BaseColor.rgb;
+                float albedoWeight = saturate(_MultiplyAlbedo);
 
                 float2 uvSpec = input.uv0 * _RTLB_SpecGlossMap_ST.xy + _RTLB_SpecGlossMap_ST.zw;
                 float4 specGlossSample = SAMPLE_TEXTURE2D(_RTLB_SpecGlossMap, sampler_RTLB_SpecGlossMap, uvSpec);
+
+                float3 specularColor = _RTLB_SpecColor.rgb;
+                float smoothness = saturate(_RTLB_Smoothness);
+                if (_RTLB_HasSpecGlossMap > 0.5f)
+                {
+                    specularColor = saturate(specGlossSample.rgb * specularColor);
+                    smoothness = saturate(specGlossSample.a * smoothness);
+                }
+                float specularPower = exp2(10.0f * smoothness + 1.0f);
 
                 float2 uvBump = input.uv0 * _RTLB_BumpMap_ST.xy + _RTLB_BumpMap_ST.zw;
                 float3 normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_RTLB_BumpMap, sampler_RTLB_BumpMap, uvBump));
@@ -123,7 +129,7 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                 float3 N = TransformTangentToWorld(normalTS, tbn);
 
                 Light mainLight = GetMainLight(input.shadowCoord);
-                float3 lighting = float3(0.0, 0.0, 0.0);
+                float3 diffuseAccum = float3(0.0, 0.0, 0.0);
                 float3 specularAccum = float3(0.0, 0.0, 0.0);
 
                 float3 viewDir = SafeNormalize(GetWorldSpaceViewDir(input.positionWS));
@@ -134,16 +140,15 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                     viewDir = viewOffset * rsqrt(viewLenSq);
                 }
 
-                float specularPower = max(specGlossSample.a * 128.0f, 1.0f);
-                float3 specularColor = specGlossSample.rgb;
-
                 float ndotlMain = saturate(dot(N, mainLight.direction));
-                lighting += ndotlMain * mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
                 if (ndotlMain > 0.0f)
                 {
+                    float3 attenuated = mainLight.color * (mainLight.distanceAttenuation * mainLight.shadowAttenuation);
+                    diffuseAccum += ndotlMain * attenuated;
+
                     float3 halfMain = SafeNormalize(mainLight.direction + viewDir);
                     float nh = saturate(dot(N, halfMain));
-                    specularAccum += pow(nh, specularPower) * specularColor * mainLight.color * mainLight.distanceAttenuation * mainLight.shadowAttenuation;
+                    specularAccum += pow(nh, specularPower) * specularColor * attenuated;
                 }
 
             #ifdef _ADDITIONAL_LIGHTS
@@ -159,19 +164,19 @@ Shader "Hidden/RealTimeLightBaker/UVRuntimeBakerURP"
                     #endif
 
                     float ndotl = saturate(dot(N, light.direction));
-                    lighting += ndotl * light.color * light.distanceAttenuation * light.shadowAttenuation;
                     if (ndotl > 0.0f)
                     {
+                        float3 attenuated = light.color * (light.distanceAttenuation * light.shadowAttenuation);
+                        diffuseAccum += ndotl * attenuated;
+
                         float3 halfVec = SafeNormalize(light.direction + viewDir);
                         float nh = saturate(dot(N, halfVec));
-                        specularAccum += pow(nh, specularPower) * specularColor * light.color * light.distanceAttenuation * light.shadowAttenuation;
+                        specularAccum += pow(nh, specularPower) * specularColor * attenuated;
                     }
                 LIGHT_LOOP_END
             #endif
 
-                float3 albedoColor = albedoSample.rgb;
-                float albedoWeight = saturate(_MultiplyAlbedo);
-                float3 diffuse = lerp(lighting, albedoColor * lighting, albedoWeight);
+                float3 diffuse = lerp(diffuseAccum, diffuseAccum * albedoColor, albedoWeight);
                 float3 outColor = diffuse + specularAccum;
                 return half4(outColor, 1.0f);
             }

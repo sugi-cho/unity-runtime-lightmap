@@ -60,6 +60,9 @@ namespace RealTimeLightBaker
         private static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
         private static readonly int BumpMapId = Shader.PropertyToID("_BumpMap");
         private static readonly int SpecGlossMapId = Shader.PropertyToID("_SpecGlossMap");
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int SpecColorId = Shader.PropertyToID("_SpecColor");
+        private static readonly int SmoothnessId = Shader.PropertyToID("_Smoothness");
         private static readonly int BakeCameraPosId = Shader.PropertyToID("_RTLB_BakeCameraPos");
         private static readonly List<RuntimeLightmapBaker> ActiveBakers = new();
 
@@ -604,7 +607,12 @@ namespace RealTimeLightBaker
                 var baseBinding = CreateTextureBinding(baseMapInfo, Texture2D.whiteTexture);
                 var bumpFallback = Texture2D.normalTexture != null ? Texture2D.normalTexture : Texture2D.grayTexture;
                 var bumpBinding = CreateTextureBinding(bumpMapInfo, bumpFallback);
-                var specBinding = CreateTextureBinding(specGlossMapInfo, Texture2D.blackTexture);
+                bool hasSpecGlossMap = specGlossMapInfo.Texture != null;
+                var specBinding = CreateTextureBinding(specGlossMapInfo, Texture2D.whiteTexture);
+
+                var baseColor = GetRendererColor(entry.renderer, BaseColorId, Color.white);
+                var specColor = GetRendererColor(entry.renderer, SpecColorId, new Color(0.2f, 0.2f, 0.2f, 1f));
+                float smoothness = Mathf.Clamp01(GetRendererFloat(entry.renderer, SmoothnessId, 0.5f));
 
                 var bakeTarget = new RealTimeLightBakerFeature.BakeTarget(
                     entry.lightmap,
@@ -618,7 +626,11 @@ namespace RealTimeLightBaker
                     bumpBinding.Handle,
                     bumpBinding.St,
                     specBinding.Handle,
-                    specBinding.St);
+                    specBinding.St,
+                    baseColor,
+                    specColor,
+                    smoothness,
+                    hasSpecGlossMap ? 1f : 0f);
 
                 _bakeTargets.Add(bakeTarget);
                 entry.lastBakedFrame = Time.frameCount;
@@ -1160,6 +1172,68 @@ namespace RealTimeLightBaker
             }
 
             return new MaterialTextureInfo(null, Vector2.one, Vector2.zero);
+        }
+
+        private static Color GetRendererColor(Renderer renderer, int propertyId, Color fallback)
+        {
+            if (renderer == null)
+            {
+                return fallback;
+            }
+
+            var sharedMaterials = renderer.sharedMaterials;
+            if (sharedMaterials != null && sharedMaterials.Length > 0)
+            {
+                for (int i = 0; i < sharedMaterials.Length; i++)
+                {
+                    var material = sharedMaterials[i];
+                    if (material == null || !material.HasProperty(propertyId))
+                    {
+                        continue;
+                    }
+
+                    return material.GetColor(propertyId);
+                }
+            }
+
+            var singleMaterial = renderer.sharedMaterial;
+            if (singleMaterial != null && singleMaterial.HasProperty(propertyId))
+            {
+                return singleMaterial.GetColor(propertyId);
+            }
+
+            return fallback;
+        }
+
+        private static float GetRendererFloat(Renderer renderer, int propertyId, float fallback)
+        {
+            if (renderer == null)
+            {
+                return fallback;
+            }
+
+            var sharedMaterials = renderer.sharedMaterials;
+            if (sharedMaterials != null && sharedMaterials.Length > 0)
+            {
+                for (int i = 0; i < sharedMaterials.Length; i++)
+                {
+                    var material = sharedMaterials[i];
+                    if (material == null || !material.HasProperty(propertyId))
+                    {
+                        continue;
+                    }
+
+                    return material.GetFloat(propertyId);
+                }
+            }
+
+            var singleMaterial = renderer.sharedMaterial;
+            if (singleMaterial != null && singleMaterial.HasProperty(propertyId))
+            {
+                return singleMaterial.GetFloat(propertyId);
+            }
+
+            return fallback;
         }
 
         private void CachePropertyId()

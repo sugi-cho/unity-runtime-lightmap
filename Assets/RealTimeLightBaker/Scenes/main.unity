@@ -623,7 +623,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RealTimeLightBaker.RuntimeLightmapBaker
   targets:
   - renderer: {fileID: 478038722}
-    lightmapSize: 1024
+    lightmapSize: 4096
+    bakeCamera: {fileID: 0}
     OnLightmapCreatedForTarget:
       m_PersistentCalls:
         m_Calls:
@@ -653,6 +654,7 @@ MonoBehaviour:
           m_CallState: 1
   - renderer: {fileID: 999466167}
     lightmapSize: 1024
+    bakeCamera: {fileID: 0}
     OnLightmapCreatedForTarget:
       m_PersistentCalls:
         m_Calls:
@@ -682,6 +684,7 @@ MonoBehaviour:
           m_CallState: 1
   - renderer: {fileID: 851983978}
     lightmapSize: 1024
+    bakeCamera: {fileID: 0}
     OnLightmapCreatedForTarget:
       m_PersistentCalls:
         m_Calls:
@@ -711,6 +714,7 @@ MonoBehaviour:
           m_CallState: 1
   - renderer: {fileID: 507997082}
     lightmapSize: 1024
+    bakeCamera: {fileID: 0}
     OnLightmapCreatedForTarget:
       m_PersistentCalls:
         m_Calls:
@@ -740,6 +744,7 @@ MonoBehaviour:
           m_CallState: 1
   - renderer: {fileID: 2103266472}
     lightmapSize: 1024
+    bakeCamera: {fileID: 0}
     OnLightmapCreatedForTarget:
       m_PersistentCalls:
         m_Calls:
@@ -787,6 +792,7 @@ MonoBehaviour:
   autoApplyToTargets: 1
   runtimeLightmapProperty: _RuntimeLightmap
   defaultLightmapSize: 1024
+  defaultBakeCamera: {fileID: 550863051}
 --- !u!4 &457225364
 Transform:
   m_ObjectHideFlags: 0
@@ -996,7 +1002,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 5.626e-42, y: 2.524355e-29, z: 0, w: 4.3e-44}
+  m_BoundingSphereOverride: {x: 0, y: 0, z: 2.942727e-39, w: 0}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -1804,7 +1810,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 2.7119297e-20, y: 1.4047225e-36, z: 2.098e-42, w: 6.561082e+28}
+  m_BoundingSphereOverride: {x: 2.7135418e-20, y: 1.561309e-39, z: 1.226e-41, w: -2.4405384e-30}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -2376,7 +2382,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 2.7132364e-20, y: 1.285802e-39, z: 1.1435e-41, w: 6.561082e+28}
+  m_BoundingSphereOverride: {x: 1.435e-42, y: 0, z: NaN, w: 1e-45}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
