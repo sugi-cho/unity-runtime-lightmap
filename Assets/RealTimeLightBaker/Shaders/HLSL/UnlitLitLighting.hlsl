@@ -1,8 +1,12 @@
 #ifndef UNLIT_LIT_LIGHTING_INCLUDED
 #define UNLIT_LIT_LIGHTING_INCLUDED
 
+#include_with_pragmas "Assets/RealTimeLightBaker/Shaders/HLSL/UnlitLitVariants.hlsl"
+
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
 
 struct UnlitLitInput
 {
@@ -41,7 +45,7 @@ static float3 ComputeAdditionalLightsContribution(in UnlitLitInput inputData)
         float NdotL = saturate(dot(inputData.normalWS, light.direction));
 
         #if defined(_ADDITIONAL_LIGHT_SHADOWS)
-            float realtimeShadow = SampleAdditionalShadow(lightIndex, inputData.positionWS);
+            float realtimeShadow = AdditionalLightRealtimeShadow(lightIndex, inputData.positionWS);
         #else
             float realtimeShadow = 1.0f;
         #endif

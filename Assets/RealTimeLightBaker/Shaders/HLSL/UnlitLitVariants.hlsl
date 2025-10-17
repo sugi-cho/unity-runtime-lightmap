@@ -1,0 +1,6 @@
+#pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS
+#pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS_CASCADE
+#pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS_SCREEN
+#pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
+#pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+#pragma multi_compile_fragment _ _SHADOWS_SOFT
