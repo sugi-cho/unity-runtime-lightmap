@@ -59,6 +59,23 @@ static float3 ComputeAdditionalLightsContribution(in UnlitLitInput inputData)
 
 void UnlitLitLighting_float(float3 positionWS, float3 normalWS, float3 albedo, float occlusion, out float3 color)
 {
+    #if defined(_MAIN_LIGHT_SHADOWS_CASCADE) || defined(_MAIN_LIGHT_SHADOWS_SCREEN)
+    #ifndef _MAIN_LIGHT_SHADOWS
+        #define _MAIN_LIGHT_SHADOWS
+    #endif
+#endif
+
+#if defined(_MAIN_LIGHT_SHADOWS)
+    #ifndef MAIN_LIGHT_SHADOWS
+        #define MAIN_LIGHT_SHADOWS
+    #endif
+#endif
+
+#if defined(_ADDITIONAL_LIGHT_SHADOWS) && !defined(ADDITIONAL_LIGHTS)
+    #define ADDITIONAL_LIGHTS
+#endif
+
+
     UnlitLitInput inputData;
     inputData.positionWS = positionWS;
     inputData.normalWS = normalize(normalWS);
