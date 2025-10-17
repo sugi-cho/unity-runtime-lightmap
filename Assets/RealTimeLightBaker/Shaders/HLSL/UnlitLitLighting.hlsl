@@ -1,5 +1,6 @@
 #ifndef UNLIT_LIT_LIGHTING_INCLUDED
 #define UNLIT_LIT_LIGHTING_INCLUDED
+#define _MAIN_LIGHT_SHADOWS
 
 #include_with_pragmas "Assets/RealTimeLightBaker/Shaders/HLSL/UnlitLitVariants.hlsl"
 
@@ -21,7 +22,7 @@ static float3 ComputeMainLightContribution(in UnlitLitInput inputData)
     Light mainLight = GetMainLight();
 
     float4 shadowCoord = TransformWorldToShadowCoord(inputData.positionWS);
-    #if defined(MAIN_LIGHT_SHADOWS)
+    #if defined(_MAIN_LIGHT_SHADOWS)
         float realtimeShadow = MainLightRealtimeShadow(shadowCoord);
     #else
         float realtimeShadow = 1.0f;
@@ -39,18 +40,19 @@ static float3 ComputeAdditionalLightsContribution(in UnlitLitInput inputData)
     uint count = GetAdditionalLightsCount();
 
     [loop]
-    for (uint lightIndex = 0u; lightIndex < count; ++lightIndex)
+    for (uint perObj = 0u; perObj < GetAdditionalLightsCount(); ++perObj)
     {
-        Light light = GetAdditionalLight(lightIndex, inputData.positionWS);
+        Light light = GetAdditionalLight(perObj, inputData.positionWS);
         float NdotL = saturate(dot(inputData.normalWS, light.direction));
 
         #if defined(_ADDITIONAL_LIGHT_SHADOWS)
-            float realtimeShadow = AdditionalLightRealtimeShadow(lightIndex, inputData.positionWS);
+            const uint visibleIdx = GetPerObjectLightIndex(perObj);
+            float realtimeShadow = AdditionalLightRealtimeShadow(visibleIdx, inputData.positionWS, light.direction);
         #else
             float realtimeShadow = 1.0f;
         #endif
 
-        float attenuation = light.distanceAttenuation * light.shadowAttenuation * realtimeShadow;
+        float attenuation = light.distanceAttenuation * min(light.shadowAttenuation, realtimeShadow);
         lighting += light.color * NdotL * attenuation;
     }
 
@@ -59,23 +61,6 @@ static float3 ComputeAdditionalLightsContribution(in UnlitLitInput inputData)
 
 void UnlitLitLighting_float(float3 positionWS, float3 normalWS, float3 albedo, float occlusion, out float3 color)
 {
-    #if defined(_MAIN_LIGHT_SHADOWS_CASCADE) || defined(_MAIN_LIGHT_SHADOWS_SCREEN)
-    #ifndef _MAIN_LIGHT_SHADOWS
-        #define _MAIN_LIGHT_SHADOWS
-    #endif
-#endif
-
-#if defined(_MAIN_LIGHT_SHADOWS)
-    #ifndef MAIN_LIGHT_SHADOWS
-        #define MAIN_LIGHT_SHADOWS
-    #endif
-#endif
-
-#if defined(_ADDITIONAL_LIGHT_SHADOWS) && !defined(ADDITIONAL_LIGHTS)
-    #define ADDITIONAL_LIGHTS
-#endif
-
-
     UnlitLitInput inputData;
     inputData.positionWS = positionWS;
     inputData.normalWS = normalize(normalWS);
