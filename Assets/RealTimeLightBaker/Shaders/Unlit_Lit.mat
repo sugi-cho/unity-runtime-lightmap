@@ -54,6 +54,8 @@ Material:
     - _Occlusion: 1
     - _QueueControl: 0
     - _QueueOffset: 0
+    - _Smoothness: 0.746
+    - _SpecularStrength: 1.13
     m_Colors:
     - _BaseColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_BuildTextureStacks: []
