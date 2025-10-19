@@ -1,10 +1,11 @@
 root = true
 
-# c#のファイルを指定
-[*.{cs,shader,compute,hlsl,cginc}]
-
-# 改行設定
+# Default rules for scripts and shaders
+[*.{cs,shader,compute}]
 end_of_line = lf
+charset = utf-8-bom
 
-# UTF-8に変換
+# HLSL/Cg files should stay on CRLF to appease Unity on Windows
+[*.{hlsl,cginc}]
+end_of_line = crlf
 charset = utf-8-bom
