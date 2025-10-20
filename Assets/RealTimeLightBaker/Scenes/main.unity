@@ -819,6 +819,7 @@ GameObject:
   - component: {fileID: 478038724}
   - component: {fileID: 478038723}
   - component: {fileID: 478038722}
+  - component: {fileID: 478038725}
   m_Layer: 0
   m_Name: Cube
   m_TagString: Untagged
@@ -851,7 +852,7 @@ MeshRenderer:
   m_RenderingLayerMask: 257
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 1b3a5614e29b2304490fbe87ed50cd67, type: 2}
+  - {fileID: 2100000, guid: c9e65c41a8e908c43a19a8460151ee6e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -897,6 +898,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 499247144}
   m_LocalEulerAnglesHint: {x: -45, y: 30, z: 20}
+--- !u!114 &478038725
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 478038720}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aada855204237774a86d81a6b97f3c87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MaterialPropertySetter
+  floatProperties: []
+  colorProperties: []
+  vectorProperties:
+  - propertyName: _UnwrapPos
+    value: {x: -0.62, y: 0.1, z: 0.4, w: 0.4}
+  textureProperties: []
 --- !u!1 &484321712
 GameObject:
   m_ObjectHideFlags: 0
@@ -1002,7 +1021,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 9.1858e-41, y: 4.591775e-39, z: 2.2227777e-38, w: 9.1858e-41}
+  m_BoundingSphereOverride: {x: 1.4557e-41, y: 2.524355e-29, z: 0, w: 6.573344e+28}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -1152,6 +1171,7 @@ GameObject:
   - component: {fileID: 507997084}
   - component: {fileID: 507997083}
   - component: {fileID: 507997082}
+  - component: {fileID: 507997085}
   m_Layer: 0
   m_Name: Capsule
   m_TagString: Untagged
@@ -1184,7 +1204,7 @@ MeshRenderer:
   m_RenderingLayerMask: 2049
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 1b3a5614e29b2304490fbe87ed50cd67, type: 2}
+  - {fileID: 2100000, guid: c9e65c41a8e908c43a19a8460151ee6e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1230,6 +1250,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 499247144}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &507997085
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 507997081}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aada855204237774a86d81a6b97f3c87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MaterialPropertySetter
+  floatProperties: []
+  colorProperties: []
+  vectorProperties:
+  - propertyName: _UnwrapPos
+    value: {x: -0.62, y: -0.5, z: 0.4, w: 0.4}
+  textureProperties: []
 --- !u!1 &547624370
 GameObject:
   m_ObjectHideFlags: 0
@@ -1486,7 +1524,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &663003502
 Transform:
   m_ObjectHideFlags: 0
@@ -1626,7 +1664,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &723883386
 Transform:
   m_ObjectHideFlags: 0
@@ -1658,6 +1696,7 @@ GameObject:
   - component: {fileID: 851983980}
   - component: {fileID: 851983979}
   - component: {fileID: 851983978}
+  - component: {fileID: 851983981}
   m_Layer: 0
   m_Name: Plane
   m_TagString: Untagged
@@ -1736,6 +1775,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 499247144}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &851983981
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 851983976}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aada855204237774a86d81a6b97f3c87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MaterialPropertySetter
+  floatProperties: []
+  colorProperties: []
+  vectorProperties:
+  - propertyName: _UnwrapPos
+    value: {x: 0.22, y: 0.1, z: 0.4, w: 0.4}
+  textureProperties: []
 --- !u!1 &988513957
 GameObject:
   m_ObjectHideFlags: 0
@@ -1810,7 +1867,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 9.545679e-29, y: 9.1858e-41, z: 9.275385e-39, w: 4.099838e-19}
+  m_BoundingSphereOverride: {x: 3.159e-42, y: 2.524355e-29, z: 0, w: 7.715509e+31}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -1874,6 +1931,7 @@ GameObject:
   - component: {fileID: 999466170}
   - component: {fileID: 999466169}
   - component: {fileID: 999466167}
+  - component: {fileID: 999466171}
   m_Layer: 0
   m_Name: Sphere
   m_TagString: Untagged
@@ -1906,7 +1964,7 @@ MeshRenderer:
   m_RenderingLayerMask: 513
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 1b3a5614e29b2304490fbe87ed50cd67, type: 2}
+  - {fileID: 2100000, guid: c9e65c41a8e908c43a19a8460151ee6e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1952,6 +2010,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 499247144}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &999466171
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 999466166}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aada855204237774a86d81a6b97f3c87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MaterialPropertySetter
+  floatProperties: []
+  colorProperties: []
+  vectorProperties:
+  - propertyName: _UnwrapPos
+    value: {x: -0.2, y: 0.1, z: 0.4, w: 0.4}
+  textureProperties: []
 --- !u!1 &1005631277
 GameObject:
   m_ObjectHideFlags: 0
@@ -1980,7 +2056,7 @@ PlayableDirector:
   serializedVersion: 3
   m_PlayableAsset: {fileID: 11400000, guid: f70141fc6ae791f4ab6e9625b30f5363, type: 2}
   m_InitialState: 1
-  m_WrapMode: 2
+  m_WrapMode: 1
   m_DirectorUpdateMode: 1
   m_InitialTime: 0
   m_SceneBindings:
@@ -2382,7 +2458,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 3.67342e-40, y: 1.4546743e-37, z: 9.1858e-41, w: 1.4546743e-37}
+  m_BoundingSphereOverride: {x: 1.3296e-41, y: 2.524355e-29, z: 0, w: 7.34684e-39}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -2474,8 +2550,9 @@ GameObject:
   - component: {fileID: 1877316536}
   - component: {fileID: 1877316535}
   - component: {fileID: 1877316534}
+  - component: {fileID: 1877316538}
   m_Layer: 0
-  m_Name: UnlitTest
+  m_Name: Sphere
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2527,7 +2604,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 1b3a5614e29b2304490fbe87ed50cd67, type: 2}
+  - {fileID: 2100000, guid: c9e65c41a8e908c43a19a8460151ee6e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2573,6 +2650,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1877316538
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1877316533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aada855204237774a86d81a6b97f3c87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MaterialPropertySetter
+  floatProperties: []
+  colorProperties: []
+  vectorProperties:
+  - propertyName: _UnwrapPos
+    value: {x: 0.22, y: -0.5, z: 0.4, w: 0.4}
+  textureProperties: []
 --- !u!1 &1953623199
 GameObject:
   m_ObjectHideFlags: 0
@@ -2792,6 +2887,7 @@ GameObject:
   - component: {fileID: 2103266474}
   - component: {fileID: 2103266473}
   - component: {fileID: 2103266472}
+  - component: {fileID: 2103266475}
   m_Layer: 0
   m_Name: Capsule (1)
   m_TagString: Untagged
@@ -2824,7 +2920,7 @@ MeshRenderer:
   m_RenderingLayerMask: 4097
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 1b3a5614e29b2304490fbe87ed50cd67, type: 2}
+  - {fileID: 2100000, guid: c9e65c41a8e908c43a19a8460151ee6e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2870,6 +2966,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 499247144}
   m_LocalEulerAnglesHint: {x: 45, y: 0, z: 0}
+--- !u!114 &2103266475
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2103266471}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aada855204237774a86d81a6b97f3c87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MaterialPropertySetter
+  floatProperties: []
+  colorProperties: []
+  vectorProperties:
+  - propertyName: _UnwrapPos
+    value: {x: -0.2, y: -0.5, z: 0.4, w: 0.4}
+  textureProperties: []
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
