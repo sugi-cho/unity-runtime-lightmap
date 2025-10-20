@@ -1,7 +1,7 @@
 #ifndef UNLIT_LIT_LIGHTING_INCLUDED
 #define UNLIT_LIT_LIGHTING_INCLUDED
 
-#include_with_pragmas "Assets/RealTimeLightBaker/Shaders/HLSL/CustomLightingVariants.hlsl"
+#include_with_pragmas "CustomLightingVariants.hlsl"
 
 #if !defined(SHADERGRAPH_PREVIEW)
     #ifndef _MAIN_LIGHT_SHADOWS
