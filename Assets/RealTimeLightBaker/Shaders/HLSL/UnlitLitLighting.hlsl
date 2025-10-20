@@ -107,9 +107,11 @@ void UnlitLightingElements_float(
     float smoothness,
     float specularStrength,
     out float3 mainLightDiffuse,
-    out float3 mainLightSpecular,
     out float3 additionalLightsDiffuse,
-    out float3 additionalLightsSpecular)
+    out float3 mainLightSpecular,
+    out float3 additionalLightsSpecular,
+    out float mainLightRealtimeShadow,
+    out float additionalLightsRealTimeShadow)
 {
     UnlitLitInput inputData;
     inputData.positionWS = positionWS;
@@ -123,10 +125,19 @@ void UnlitLightingElements_float(
     LightingResult mainLight = ComputeMainLightContribution(inputData);
     LightingResult additionalLights = ComputeAdditionalLightsContribution(inputData);
 
-    mainLightDiffuse = mainLight.diffuse * mainLight.realTimeShadow;
-    mainLightSpecular = mainLight.specular * mainLight.realTimeShadow;
-    additionalLightsDiffuse = additionalLights.diffuse * additionalLights.realTimeShadow;
-    additionalLightsSpecular = additionalLights.specular * additionalLights.realTimeShadow;
+    float shadowedMainFactor = saturate(mainLight.realTimeShadow);
+    float shadowedAdditionalFactor = saturate(additionalLights.realTimeShadow);
+
+    mainLightDiffuse = mainLight.diffuse * shadowedMainFactor;
+    mainLightSpecular = mainLight.specular * shadowedMainFactor;
+    additionalLightsDiffuse = additionalLights.diffuse * shadowedAdditionalFactor;
+    additionalLightsSpecular = additionalLights.specular * shadowedAdditionalFactor;
+
+    const float3 luminanceWeights = float3(0.2126f, 0.7152f, 0.0722f);
+    float mainDiffuseIntensity = dot(mainLight.diffuse, luminanceWeights);
+    float additionalDiffuseIntensity = dot(additionalLights.diffuse, luminanceWeights);
+    mainLightRealtimeShadow = mainDiffuseIntensity * saturate(1.0f - shadowedMainFactor);
+    additionalLightsRealTimeShadow = additionalDiffuseIntensity * saturate(1.0f - shadowedAdditionalFactor);
 }
 
 #else // SHADERGRAPH_PREVIEW
@@ -189,6 +200,7 @@ static LightingResult ComputeAdditionalLightContribution(in UnlitLitInput inputD
 
     if (NdotL <= 0.0f)
     {
+        result.realTimeShadow = 1.0f;
         return result;
     }
 
@@ -262,9 +274,11 @@ void UnlitLightingElements_float(
     float smoothness,
     float specularStrength,
     out float3 mainLightDiffuse,
-    out float3 mainLightSpecular,
     out float3 additionalLightsDiffuse,
-    out float3 additionalLightsSpecular)
+    out float3 mainLightSpecular,
+    out float3 additionalLightsSpecular,
+    out float mainLightRealtimeShadow,
+    out float additionalLightsRealTimeShadow)
 {
     UnlitLitInput inputData;
     inputData.positionWS = positionWS;
@@ -276,11 +290,16 @@ void UnlitLightingElements_float(
     inputData.occlusion = 1.0f;
 
     LightingResult mainLight = ComputeMainLightContribution(inputData);
-    mainLightDiffuse = mainLight.diffuse * mainLight.realTimeShadow;
-    mainLightSpecular = mainLight.specular * mainLight.realTimeShadow;
+    const float3 luminanceWeights = float3(0.2126f, 0.7152f, 0.0722f);
+    float shadowedMainFactor = saturate(mainLight.realTimeShadow);
+    mainLightDiffuse = mainLight.diffuse * shadowedMainFactor;
+    mainLightSpecular = mainLight.specular * shadowedMainFactor;
+    float mainDiffuseIntensity = dot(mainLight.diffuse, luminanceWeights);
+    mainLightRealtimeShadow = mainDiffuseIntensity * saturate(1.0f - shadowedMainFactor);
 
     float3 accumulatedDiffuse = 0.0f;
     float3 accumulatedSpecular = 0.0f;
+    float accumulatedBlockedIntensity = 0.0f;
 
 #if defined(_ADDITIONAL_LIGHTS)
     uint additionalCount = GetAdditionalLightsCount();
@@ -288,17 +307,20 @@ void UnlitLightingElements_float(
     for (uint perObj = 0u; perObj < additionalCount; ++perObj)
     {
         LightingResult additionalLight = ComputeAdditionalLightContribution(inputData, perObj);
-        float shadowFactor = additionalLight.realTimeShadow;
-        accumulatedDiffuse += additionalLight.diffuse * shadowFactor;
+        float shadowFactor = saturate(additionalLight.realTimeShadow);
+        float3 lightDiffuse = additionalLight.diffuse;
+        accumulatedDiffuse += lightDiffuse * shadowFactor;
         accumulatedSpecular += additionalLight.specular * shadowFactor;
+        float lightIntensity = dot(lightDiffuse, luminanceWeights);
+        accumulatedBlockedIntensity += lightIntensity * saturate(1.0f - shadowFactor);
     }
 #endif
 
     additionalLightsDiffuse = accumulatedDiffuse;
     additionalLightsSpecular = accumulatedSpecular;
+    additionalLightsRealTimeShadow = accumulatedBlockedIntensity;
 }
 
 #endif // SHADERGRAPH_PREVIEW
 
 #endif // UNLIT_LIT_LIGHTING_INCLUDED
-
