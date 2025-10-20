@@ -329,7 +329,7 @@ MonoBehaviour:
   m_Name: RecorderClip
   m_EditorClassIdentifier: Unity.Recorder.Editor::UnityEditor.Recorder.MovieRecorderSettings
   enabled: 1
-  take: 5
+  take: 6
   captureEveryNthFrame: 1
   fileNameGenerator:
     m_Path:
