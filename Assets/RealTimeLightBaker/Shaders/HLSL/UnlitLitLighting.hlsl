@@ -24,6 +24,7 @@ struct LightingResult
 {
     float3 diffuse;
     float3 specular;
+    float realTimeShadow;
 };
 
 #if defined(SHADERGRAPH_PREVIEW)
@@ -40,6 +41,7 @@ static LightingResult ComputeMainLightContribution(in UnlitLitInput inputData)
     LightingResult result;
     result.diffuse = 0.0f;
     result.specular = 0.0f;
+    result.realTimeShadow = 1.0f;
 
     float3 lightDirection = normalize(float3(0.3f, 0.8f, 0.5f));
     float3 lightColor = float3(1.0f, 1.0f, 1.0f);
@@ -66,6 +68,7 @@ static LightingResult ComputeAdditionalLightsContribution(in UnlitLitInput input
     LightingResult result;
     result.diffuse = 0.0f;
     result.specular = 0.0f;
+    result.realTimeShadow = 1.0f;
     return result;
 }
 
@@ -83,8 +86,13 @@ void UnlitLitLighting_float(float3 positionWS, float3 normalWS, float3 albedo, f
     LightingResult mainLight = ComputeMainLightContribution(inputData);
     LightingResult additionalLights = ComputeAdditionalLightsContribution(inputData);
 
-    float3 directLighting = mainLight.diffuse + additionalLights.diffuse;
-    float3 specularLighting = mainLight.specular + additionalLights.specular;
+    float3 mainDiffuse = mainLight.diffuse * mainLight.realTimeShadow;
+    float3 mainSpecular = mainLight.specular * mainLight.realTimeShadow;
+    float3 additionalDiffuse = additionalLights.diffuse * additionalLights.realTimeShadow;
+    float3 additionalSpecular = additionalLights.specular * additionalLights.realTimeShadow;
+
+    float3 directLighting = mainDiffuse + additionalDiffuse;
+    float3 specularLighting = mainSpecular + additionalSpecular;
 
     float occlusionFactor = max(inputData.occlusion, 0.0f);
     float3 combinedLighting = directLighting * occlusionFactor;
@@ -115,10 +123,10 @@ void UnlitLightingElements_float(
     LightingResult mainLight = ComputeMainLightContribution(inputData);
     LightingResult additionalLights = ComputeAdditionalLightsContribution(inputData);
 
-    mainLightDiffuse = mainLight.diffuse;
-    mainLightSpecular = mainLight.specular;
-    additionalLightsDiffuse = additionalLights.diffuse;
-    additionalLightsSpecular = additionalLights.specular;
+    mainLightDiffuse = mainLight.diffuse * mainLight.realTimeShadow;
+    mainLightSpecular = mainLight.specular * mainLight.realTimeShadow;
+    additionalLightsDiffuse = additionalLights.diffuse * additionalLights.realTimeShadow;
+    additionalLightsSpecular = additionalLights.specular * additionalLights.realTimeShadow;
 }
 
 #else // SHADERGRAPH_PREVIEW
@@ -138,6 +146,7 @@ static LightingResult ComputeMainLightContribution(in UnlitLitInput inputData)
     LightingResult result;
     result.diffuse = 0.0f;
     result.specular = 0.0f;
+    result.realTimeShadow = 1.0f;
 
     Light mainLight = GetMainLight();
 
@@ -147,12 +156,13 @@ static LightingResult ComputeMainLightContribution(in UnlitLitInput inputData)
 #else
     float realtimeShadow = 1.0f;
 #endif
+    result.realTimeShadow = realtimeShadow;
 
     float smoothness = saturate(inputData.smoothness);
     float shininess = exp2(10.0f * smoothness + 1.0f);
 
     float NdotL = saturate(dot(inputData.normalWS, mainLight.direction));
-    float attenuation = mainLight.distanceAttenuation * mainLight.shadowAttenuation * realtimeShadow;
+    float attenuation = mainLight.distanceAttenuation * mainLight.shadowAttenuation;
 
     float3 lightContribution = mainLight.color * attenuation;
     result.diffuse = lightContribution * NdotL;
@@ -167,40 +177,40 @@ static LightingResult ComputeMainLightContribution(in UnlitLitInput inputData)
     return result;
 }
 
-static LightingResult ComputeAdditionalLightsContribution(in UnlitLitInput inputData)
+static LightingResult ComputeAdditionalLightContribution(in UnlitLitInput inputData, uint perObjectLightIndex)
 {
     LightingResult result;
     result.diffuse = 0.0f;
     result.specular = 0.0f;
+    result.realTimeShadow = 0.0f;
 
-    uint count = GetAdditionalLightsCount();
+    Light light = GetAdditionalLight(perObjectLightIndex, inputData.positionWS);
+    float NdotL = saturate(dot(inputData.normalWS, light.direction));
+
+    if (NdotL <= 0.0f)
+    {
+        return result;
+    }
+
+#if defined(_ADDITIONAL_LIGHT_SHADOWS)
+    const uint visibleIdx = GetPerObjectLightIndex(perObjectLightIndex);
+    float realtimeShadow = AdditionalLightRealtimeShadow(visibleIdx, inputData.positionWS, light.direction);
+#else
+    float realtimeShadow = 1.0f;
+#endif
+
+    result.realTimeShadow = min(light.shadowAttenuation, realtimeShadow);
+
     float smoothness = saturate(inputData.smoothness);
     float shininess = exp2(10.0f * smoothness + 1.0f);
 
-    [loop]
-    for (uint perObj = 0u; perObj < count; ++perObj)
-    {
-        Light light = GetAdditionalLight(perObj, inputData.positionWS);
-        float NdotL = saturate(dot(inputData.normalWS, light.direction));
+    float attenuation = light.distanceAttenuation;
+    float3 lightContribution = light.color * attenuation;
+    result.diffuse = lightContribution * NdotL;
 
-#if defined(_ADDITIONAL_LIGHT_SHADOWS)
-        const uint visibleIdx = GetPerObjectLightIndex(perObj);
-        float realtimeShadow = AdditionalLightRealtimeShadow(visibleIdx, inputData.positionWS, light.direction);
-#else
-        float realtimeShadow = 1.0f;
-#endif
-
-        float attenuation = light.distanceAttenuation * min(light.shadowAttenuation, realtimeShadow);
-        float3 lightContribution = light.color * attenuation;
-        result.diffuse += lightContribution * NdotL;
-
-        if (NdotL > 0.0f)
-        {
-            float3 halfDir = normalize(light.direction + inputData.viewDirWS);
-            float specularTerm = pow(saturate(dot(inputData.normalWS, halfDir)), shininess);
-            result.specular += lightContribution * specularTerm * inputData.specularStrength;
-        }
-    }
+    float3 halfDir = normalize(light.direction + inputData.viewDirWS);
+    float specularTerm = pow(saturate(dot(inputData.normalWS, halfDir)), shininess);
+    result.specular = lightContribution * specularTerm * inputData.specularStrength;
 
     return result;
 }
@@ -217,11 +227,27 @@ void UnlitLitLighting_float(float3 positionWS, float3 normalWS, float3 albedo, f
     inputData.occlusion = occlusion;
 
     LightingResult mainLight = ComputeMainLightContribution(inputData);
-    LightingResult additionalLights = ComputeAdditionalLightsContribution(inputData);
+    float3 mainDiffuse = mainLight.diffuse * mainLight.realTimeShadow;
+    float3 mainSpecular = mainLight.specular * mainLight.realTimeShadow;
 
-    float3 directLighting = mainLight.diffuse + additionalLights.diffuse;
+    float3 additionalDiffuse = 0.0f;
+    float3 additionalSpecular = 0.0f;
+
+#if defined(_ADDITIONAL_LIGHTS)
+    uint additionalCount = GetAdditionalLightsCount();
+    [loop]
+    for (uint perObj = 0u; perObj < additionalCount; ++perObj)
+    {
+        LightingResult additionalLight = ComputeAdditionalLightContribution(inputData, perObj);
+        float shadowFactor = additionalLight.realTimeShadow;
+        additionalDiffuse += additionalLight.diffuse * shadowFactor;
+        additionalSpecular += additionalLight.specular * shadowFactor;
+    }
+#endif
+
+    float3 directLighting = mainDiffuse + additionalDiffuse;
     float3 indirectLighting = SampleSH(inputData.normalWS);
-    float3 specularLighting = mainLight.specular + additionalLights.specular;
+    float3 specularLighting = mainSpecular + additionalSpecular;
 
     float occlusionFactor = max(inputData.occlusion, 0.0f);
     float3 combinedLighting = (directLighting + indirectLighting) * occlusionFactor;
@@ -250,12 +276,26 @@ void UnlitLightingElements_float(
     inputData.occlusion = 1.0f;
 
     LightingResult mainLight = ComputeMainLightContribution(inputData);
-    LightingResult additionalLights = ComputeAdditionalLightsContribution(inputData);
+    mainLightDiffuse = mainLight.diffuse * mainLight.realTimeShadow;
+    mainLightSpecular = mainLight.specular * mainLight.realTimeShadow;
 
-    mainLightDiffuse = mainLight.diffuse;
-    mainLightSpecular = mainLight.specular;
-    additionalLightsDiffuse = additionalLights.diffuse;
-    additionalLightsSpecular = additionalLights.specular;
+    float3 accumulatedDiffuse = 0.0f;
+    float3 accumulatedSpecular = 0.0f;
+
+#if defined(_ADDITIONAL_LIGHTS)
+    uint additionalCount = GetAdditionalLightsCount();
+    [loop]
+    for (uint perObj = 0u; perObj < additionalCount; ++perObj)
+    {
+        LightingResult additionalLight = ComputeAdditionalLightContribution(inputData, perObj);
+        float shadowFactor = additionalLight.realTimeShadow;
+        accumulatedDiffuse += additionalLight.diffuse * shadowFactor;
+        accumulatedSpecular += additionalLight.specular * shadowFactor;
+    }
+#endif
+
+    additionalLightsDiffuse = accumulatedDiffuse;
+    additionalLightsSpecular = accumulatedSpecular;
 }
 
 #endif // SHADERGRAPH_PREVIEW
