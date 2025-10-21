@@ -72,12 +72,14 @@ static LightingResult ComputeAdditionalLightsContribution(in UnlitLitInput input
     return result;
 }
 
-void UnlitLitLighting_float(float3 positionWS, float3 normalWS, float3 albedo, float occlusion, float smoothness, float specularStrength, out float3 color)
+void UnlitLitLighting_float(float3 cameraPositionWS, float3 positionWS, float3 normalWS, float3 albedo, float occlusion, float smoothness, float specularStrength, out float3 color)
 {
     UnlitLitInput inputData;
     inputData.positionWS = positionWS;
     inputData.normalWS = normalize(normalWS);
-    inputData.viewDirWS = normalize(float3(0.0f, 0.0f, 1.0f));
+    float3 viewDirWS = cameraPositionWS - positionWS;
+    float viewDirLen = max(length(viewDirWS), 1e-5f);
+    inputData.viewDirWS = viewDirWS / viewDirLen;
     inputData.smoothness = saturate(smoothness);
     inputData.specularStrength = max(specularStrength, 0.0f);
     inputData.baseColor = albedo;
@@ -102,6 +104,7 @@ void UnlitLitLighting_float(float3 positionWS, float3 normalWS, float3 albedo, f
 }
 
 void UnlitLightingElements_float(
+    float3 cameraPositionWS,
     float3 positionWS,
     float3 normalWS,
     float smoothness,
@@ -116,7 +119,9 @@ void UnlitLightingElements_float(
     UnlitLitInput inputData;
     inputData.positionWS = positionWS;
     inputData.normalWS = normalize(normalWS);
-    inputData.viewDirWS = normalize(float3(0.0f, 0.0f, 1.0f));
+    float3 viewDirWS = cameraPositionWS - positionWS;
+    float viewDirLen = max(length(viewDirWS), 1e-5f);
+    inputData.viewDirWS = viewDirWS / viewDirLen;
     inputData.smoothness = saturate(smoothness);
     inputData.specularStrength = max(specularStrength, 0.0f);
     inputData.baseColor = 1.0f.xxx;
@@ -227,12 +232,14 @@ static LightingResult ComputeAdditionalLightContribution(in UnlitLitInput inputD
     return result;
 }
 
-void UnlitLitLighting_float(float3 positionWS, float3 normalWS, float3 albedo, float occlusion, float smoothness, float specularStrength, out float3 color)
+void UnlitLitLighting_float(float3 cameraPositionWS, float3 positionWS, float3 normalWS, float3 albedo, float occlusion, float smoothness, float specularStrength, out float3 color)
 {
     UnlitLitInput inputData;
     inputData.positionWS = positionWS;
     inputData.normalWS = normalize(normalWS);
-    inputData.viewDirWS = normalize(GetWorldSpaceViewDir(positionWS));
+    float3 viewDirWS = cameraPositionWS - positionWS;
+    float viewDirLen = max(length(viewDirWS), 1e-5f);
+    inputData.viewDirWS = viewDirWS / viewDirLen;
     inputData.smoothness = saturate(smoothness);
     inputData.specularStrength = max(specularStrength, 0.0f);
     inputData.baseColor = albedo;
@@ -269,6 +276,7 @@ void UnlitLitLighting_float(float3 positionWS, float3 normalWS, float3 albedo, f
 }
 
 void UnlitLightingElements_float(
+    float3 cameraPositionWS,
     float3 positionWS,
     float3 normalWS,
     float smoothness,
@@ -283,7 +291,9 @@ void UnlitLightingElements_float(
     UnlitLitInput inputData;
     inputData.positionWS = positionWS;
     inputData.normalWS = normalize(normalWS);
-    inputData.viewDirWS = normalize(GetWorldSpaceViewDir(positionWS));
+    float3 viewDirWS = cameraPositionWS - positionWS;
+    float viewDirLen = max(length(viewDirWS), 1e-5f);
+    inputData.viewDirWS = viewDirWS / viewDirLen;
     inputData.smoothness = saturate(smoothness);
     inputData.specularStrength = max(specularStrength, 0.0f);
     inputData.baseColor = 1.0f.xxx;

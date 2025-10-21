@@ -69,7 +69,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RealTimeLightBaker.RealTimeLightBakerFeature
   m_Active: 1
   settings:
-    bakeMaterial: {fileID: 2100000, guid: 50c073ce729dbe947aa8ef62a6dfedfa, type: 2}
+    bakeMaterial: {fileID: -876546973899608171, guid: fe62aec7d88228849b3dbae637eac6c1, type: 3}
     renderPassEvent: 100
     enableDilation: 1
     dilationMaterial: {fileID: 2100000, guid: 9a1cc89113f16bd4fb4bc37ed6c72c4a, type: 2}
