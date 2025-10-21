@@ -623,7 +623,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RealTimeLightBaker.RuntimeLightmapBaker
   targets:
   - renderer: {fileID: 478038722}
-    lightmapSize: 4096
+    lightmapSize: 1024
     bakeCamera: {fileID: 0}
     OnLightmapCreatedForTarget:
       m_PersistentCalls:
@@ -1009,7 +1009,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 5.31e-42, y: 2.524355e-29, z: 0, w: 1.0396158e+21}
+  m_BoundingSphereOverride: {x: 3.126e-42, y: 2.524355e-29, z: 0, w: NaN}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -1855,7 +1855,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 1.597e-42, y: 2.524355e-29, z: 0, w: 4.59239e-40}
+  m_BoundingSphereOverride: {x: 1.909e-42, y: 2.524355e-29, z: 0, w: NaN}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
@@ -2432,7 +2432,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 3.304e-42, y: 2.524355e-29, z: 0, w: 0}
+  m_BoundingSphereOverride: {x: 4.881e-42, y: 2.524355e-29, z: 0, w: NaN}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
