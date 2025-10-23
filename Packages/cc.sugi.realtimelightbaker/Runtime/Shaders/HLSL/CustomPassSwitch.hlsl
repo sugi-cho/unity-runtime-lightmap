@@ -1,4 +1,4 @@
-// File: SelectForwardOnly.hlsl
+﻿// File: SelectForwardOnly.hlsl
 #ifndef CUSTOM_SELECT_FORWARD_ONLY_INCLUDED
 #define CUSTOM_SELECT_FORWARD_ONLY_INCLUDED
 
@@ -41,6 +41,7 @@
     ((SHADERPASS == SHADERPASS_FORWARD) || \
      (SHADERPASS == SHADERPASS_GBUFFER) || \
      (SHADERPASS == SHADERPASS_UNLIT) || \
+     (SHADERPASS == SHADERPASS_DEPTHONLY) || \
      (SHADERPASS == SHADERPASS_PREVIEW))
     #define SELECT_FWD_ONLY_IMPL(OUT, A, B) OUT = (A)
 #else
