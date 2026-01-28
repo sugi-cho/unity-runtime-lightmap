@@ -27,6 +27,35 @@ struct LightingResult
     float realTimeShadow;
 };
 
+void ComputeLightingIntensity_float(
+    float3 cameraPositionWS,
+    float3 positionWS,
+    float3 normalWS,
+    float3 lightPositionWS,
+    float smoothness,
+    float specularStrength,
+    out float diffuseIntensity,
+    out float specularIntensity)
+{
+    float3 n = normalize(normalWS);
+    float3 viewDir = cameraPositionWS - positionWS;
+    float viewLen = max(length(viewDir), 1e-5f);
+    viewDir /= viewLen;
+
+    float3 lightDir = lightPositionWS - positionWS;
+    float lightLen = max(length(lightDir), 1e-5f);
+    lightDir /= lightLen;
+
+    float NdotL = saturate(dot(n, lightDir));
+    diffuseIntensity = NdotL;
+
+    float smooth = saturate(smoothness);
+    float shininess = exp2(10.0f * smooth + 1.0f);
+    float3 halfDir = normalize(lightDir + viewDir);
+    float specularTerm = pow(saturate(dot(n, halfDir)), shininess);
+    specularIntensity = specularTerm * max(specularStrength, 0.0f);
+}
+
 #if defined(SHADERGRAPH_PREVIEW)
 // ============================================================================
 // ShaderGraph Preview Fallback
